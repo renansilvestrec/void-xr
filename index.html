@@ -2,104 +2,112 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXVI (VR Fixed)</title>
+    <title>VOID - Etapa XXVII (Microfone VR)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
-    <style>
-        #audio-unlock {
-            position: fixed; top: 10px; left: 10px; z-index: 9999;
-            padding: 15px; background: #00FFFF; border: none; border-radius: 5px;
-            font-weight: bold; cursor: pointer;
-        }
-    </style>
 </head>
 <body>
-    <button id="audio-unlock">1. ATIVAR ÁUDIO (CLIQUE AQUI)</button>
+    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:20px;">ATIVAR ÁUDIO</button>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
-        
         <a-entity id="void-core" 
                   class="clickable"
                   geometry="primitive: sphere; radius: 0.2" 
                   material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
-                  event-set__mouseenter="_event: mouseenter; material.color: #FFFFFF; scale: 1.2 1.2 1.2"
-                  event-set__mouseleave="_event: mouseleave; material.color: #00FFFF; scale: 1 1 1">
+                  event-set__mouseenter="_event: mouseenter; material.color: #FFFFFF"
+                  event-set__mouseleave="_event: mouseleave; material.color: #00FFFF">
         </a-entity>
 
-        <a-camera position="0 1.6 0">
-            <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
-        </a-camera>
-
-        <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 100; interval: 100"></a-entity>
-        <a-entity laser-controls="hand: left" raycaster="objects: .clickable; far: 100; interval: 100"></a-entity>
+        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor></a-camera>
+        <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
     </a-scene>
 
     <script>
         let API_KEY = localStorage.getItem('gemini_key');
         if (!API_KEY) {
-            API_KEY = prompt("Cole sua API Key:");
+            API_KEY = prompt("API Key:");
             if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
         }
 
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // Sistema de Voz
-        const speakNatural = (text) => {
+        // VOZ
+        const speak = (t) => {
             window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            const voices = window.speechSynthesis.getVoices();
-            const bestVoice = voices.find(v => v.lang.includes('pt')) || voices[0];
-            utterance.voice = bestVoice;
-            utterance.lang = 'pt-BR';
-            window.speechSynthesis.speak(utterance);
+            const u = new SpeechSynthesisUtterance(t);
+            u.lang = 'pt-BR';
+            window.speechSynthesis.speak(u);
         };
 
-        unlockBtn.addEventListener('click', () => {
-            speakNatural("Pronto.");
-            unlockBtn.style.display = 'none';
-        });
+        unlockBtn.onclick = () => { speak("Sistema pronto"); unlockBtn.style.display='none'; };
 
-        // Voz e Reconhecimento
+        // RECONHECIMENTO DE VOZ (Otimizado para Quest)
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
 
-        // A FUNÇÃO MÁGICA: Escuta cliques de qualquer origem (Mouse, Toque ou Gatilho VR)
-        core.addEventListener('click', function (evt) {
-            console.log("Clique detectado na esfera!");
+        let isListening = false;
+
+        core.addEventListener('click', () => {
+            if (isListening) return; // Evita cliques múltiplos
+            
             try {
-                recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); 
-            } catch (e) { console.log("Já escutando..."); }
+                recognition.stop(); // Garante que está limpo
+                setTimeout(() => {
+                    recognition.start();
+                    isListening = true;
+                    core.setAttribute('material', 'color', '#FF00FF');
+                }, 100);
+
+                // Timeout: Se não falar nada em 6s, reseta a bola
+                setTimeout(() => {
+                    if (isListening) {
+                        isListening = false;
+                        recognition.stop();
+                        core.setAttribute('material', 'color', '#00FFFF');
+                    }
+                }, 6000);
+
+            } catch (e) { console.error(e); isListening = false; }
         });
 
         recognition.onresult = async (event) => {
+            isListening = false;
             const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); 
+            core.setAttribute('material', 'color', '#FFFF00');
 
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Responda curto: "${transcript}". Termine com uma cor HEX.` }] }]
-                    })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto: ${transcript}. Cor HEX no fim.` }] }] })
                 });
 
                 const data = await response.json();
                 if (data.candidates) {
                     const aiText = data.candidates[0].content.parts[0].text;
-                    const hexMatch = aiText.match(/#[0-9A-F]{6}/i);
-                    core.setAttribute('material', 'color', hexMatch ? hexMatch[0] : '#00FFFF');
-                    speakNatural(aiText.replace(/#[0-9A-F]{6}/gi, '').trim());
+                    const hex = aiText.match(/#[0-9A-F]{6}/i);
+                    core.setAttribute('material', 'color', hex ? hex[0] : '#00FFFF');
+                    speak(aiText.replace(/#[0-9A-F]{6}/gi, ''));
                 }
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
             }
         };
+
+        recognition.onerror = (e) => {
+            console.error("Erro voz:", e.error);
+            isListening = false;
+            core.setAttribute('material', 'color', '#00FFFF');
+            if(e.error === 'not-allowed') alert("Permita o microfone no Quest!");
+        };
+
+        recognition.onend = () => { isListening = false; };
     </script>
 </body>
 </html>
