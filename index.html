@@ -2,59 +2,84 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XLIII</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VOID - Etapa XLV (Reconstrução Premium)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
-        #setup-panel {
+        :root { --neon: #00FFFF; }
+        body { background: #000; margin: 0; overflow: hidden; }
+        #interface {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 10000; background: #000; color: #00FFFF; display: flex;
-            flex-direction: column; align-items: center; justify-content: center;
-            font-family: 'Courier New', monospace; text-align: center;
+            z-index: 100; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: radial-gradient(circle, #001a1a 0%, #000 70%);
+            transition: opacity 1s ease;
         }
-        button {
-            background: none; border: 2px solid #00FFFF; padding: 25px 50px;
-            color: #00FFFF; font-weight: bold; cursor: pointer; border-radius: 5px;
-            font-size: 1.2em; text-transform: uppercase; letter-spacing: 5px;
+        .void-btn {
+            background: none; border: 1px solid var(--neon); padding: 20px 40px;
+            color: var(--neon); font-family: 'Courier New', monospace;
+            font-size: 1.2rem; letter-spacing: 10px; cursor: pointer;
+            box-shadow: 0 0 15px var(--neon); transition: 0.3s;
+        }
+        .void-btn:active { transform: scale(0.95); box-shadow: 0 0 30px var(--neon); }
+        #status-bar { 
+            position: fixed; bottom: 20px; width: 100%; text-align: center;
+            color: var(--neon); font-family: monospace; font-size: 0.7rem;
+            letter-spacing: 2px; opacity: 0.5; z-index: 50;
         }
     </style>
 </head>
 <body>
 
-    <div id="setup-panel">
-        <h1 style="letter-spacing: 20px; text-shadow: 0 0 15px #00FFFF;">VOID</h1>
-        <button id="start-btn">Sincronizar</button>
+    <div id="interface">
+        <h1 style="color: var(--neon); font-family: monospace; letter-spacing: 15px; margin-bottom: 50px;">VOID</h1>
+        <button class="void-btn" id="init-link">CONECTAR</button>
     </div>
 
-    <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
-        <a-entity id="void-core" class="clickable"
-                  geometry="primitive: sphere; radius: 0.1" 
-                  material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2"
-                  animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 2000; loop: true">
+    <div id="status-bar">SISTEMA NEURAL OFFLINE</div>
+
+    <a-scene background="color: #000" renderer="antialias: true; colorManagement: true;">
+        <a-light type="ambient" color="#00FFFF" intensity="0.2"></a-light>
+        <a-light type="point" id="core-light" position="0 1.5 -2" color="#00FFFF" intensity="0.8"></a-light>
+
+        <a-entity id="void-core" class="clickable" position="0 1.5 -2">
+            <a-sphere radius="0.1" material="shader: flat; color: #00FFFF;">
+                <a-animation attribute="scale" to="1.2 1.2 1.2" direction="alternate" dur="2000" repeat="indefinite"></a-animation>
+            </a-sphere>
+            <a-sphere radius="0.15" material="shader: flat; color: #00FFFF; transparent: true; opacity: 0.2"
+                      animation="property: scale; to: 1.5 1.5 1.5; dir: alternate; dur: 1000; loop: true"></a-sphere>
         </a-entity>
 
-        <a-text id="neon-text" value="" align="center" position="0 2.3 -2" scale="3 3 3"
-                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
-                material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2"></a-text>
+        <a-entity id="manifestation-anchor" position="0 1.5 -2">
+            <a-text id="main-text" value="" align="center" position="0 0.8 0" scale="3 3 3"
+                    font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt" 
+                    material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2"></a-text>
+            
+            <a-entity id="geometry-placeholder" position="0 0 0" scale="0 0 0"
+                      animation__show="property: scale; to: 1 1 1; dur: 800; easing: easeOutElastic"
+                      animation__hide="property: scale; to: 0 0 0; dur: 500; easing: easeInBack">
+            </a-entity>
+        </a-entity>
 
-        <a-camera position="0 1.6 0"></a-camera>
+        <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
+            <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
+        </a-camera>
     </a-scene>
 
     <script>
-        const API_KEY = localStorage.getItem('gemini_key') || prompt("Chave Gemini:");
-        if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
+        const API_KEY = localStorage.getItem('gemini_key') || prompt("Sua Gemini Key:");
+        if(API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
         const core = document.querySelector('#void-core');
-        const neonText = document.querySelector('#neon-text');
-        const setupPanel = document.querySelector('#setup-panel');
+        const status = document.querySelector('#status-bar');
+        const textEl = document.querySelector('#main-text');
+        const shapeEl = document.querySelector('#geometry-placeholder');
 
-        // VOZ - Busca agressiva por qualidade
-        const speak = (text) => {
+        // Configuração de Voz Robusta
+        const speak = (txt) => {
             return new Promise(resolve => {
                 window.speechSynthesis.cancel();
-                const u = new SpeechSynthesisUtterance(text);
-                const vs = window.speechSynthesis.getVoices();
-                u.voice = vs.find(v => v.name.includes('Luciana') || v.name.includes('Google') && v.lang.includes('pt')) || vs.find(v => v.lang.includes('pt')) || vs[0];
+                const u = new SpeechSynthesisUtterance(txt);
                 u.lang = 'pt-BR';
                 u.rate = 1.0;
                 u.onend = resolve;
@@ -62,70 +87,77 @@
             });
         };
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition = new SpeechRecognition();
+        // Reconhecimento de Voz
+        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new Speech();
         recognition.lang = 'pt-BR';
 
-        document.querySelector('#start-btn').onclick = async () => {
-            await speak("Iniciando fluxo neural.");
+        document.querySelector('#init-link').onclick = async () => {
+            await speak("Sistemas prontos para manifestação.");
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
-                setupPanel.style.display = 'none';
-            } catch (e) { alert("Permita o microfone no Safari."); }
+                document.querySelector('#interface').style.opacity = '0';
+                setTimeout(() => document.querySelector('#interface').remove(), 1000);
+                status.innerText = "VOID READY - AGUARDANDO COMANDO";
+            } catch(e) { status.innerText = "ERRO DE MICROFONE"; }
         };
 
         core.addEventListener('click', () => {
-            core.setAttribute('material', 'color', '#FF00FF');
+            core.setAttribute('material', 'color', '#FF00FF', true); // Mudança via componente
+            status.innerText = "ESCUTANDO...";
             recognition.start();
         });
 
-        recognition.onresult = async (e) => {
-            const t = e.results[0][0].transcript;
+        recognition.onresult = async (event) => {
+            const transcript = event.results[0][0].transcript;
+            status.innerText = `PROCESSANDO: "${transcript.toUpperCase()}"`;
             core.setAttribute('material', 'color', '#FFFF00');
-            await processar(t);
-        };
-
-        async function processar(msg) {
+            
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-                
-                // Prompt rigoroso: JSON Puro sem explicações
-                const promptBody = {
-                    contents: [{ parts: [{ text: `Você é o sistema VOID. Gere uma aula de 3 partes sobre "${msg}". Responda APENAS um array JSON puro, sem markdown, sem texto antes ou depois: [{"l": "Símbolo", "t": "Explicação"}]` }] }]
-                };
-
-                const res = await fetch(url, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(promptBody)
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `Aja como o sistema VOID. Ensine sobre "${transcript}" em 3 etapas. Responda APENAS um JSON array: [{"l": "Letra ou Simbolo", "s": "box|sphere|torus|cone", "c": "#hex", "t": "Explicação"}].` }] }]
+                    })
                 });
 
-                const data = await res.json();
-                let raw = data.candidates[0].content.parts[0].text;
-                
-                // Extração de segurança se a IA falhar e mandar texto
-                const start = raw.indexOf('[');
-                const end = raw.lastIndexOf(']') + 1;
-                if (start === -1) throw new Error("No JSON");
-                const cleanJson = JSON.parse(raw.substring(start, end));
+                const data = await response.json();
+                const raw = data.candidates[0].content.parts[0].text;
+                const json = JSON.parse(raw.match(/\[.*\]/s)[0]);
 
-                for (let etapa of cleanJson) {
-                    neonText.setAttribute('value', etapa.l);
+                for(let etapa of json) {
+                    // Atualiza Visual
+                    textEl.setAttribute('value', etapa.l);
+                    textEl.setAttribute('color', etapa.c);
+                    shapeEl.setAttribute('geometry', `primitive: ${etapa.s}; radius: 0.2; height: 0.4`);
+                    shapeEl.setAttribute('material', `color: ${etapa.c}; shader: flat; emissive: ${etapa.c}; emissiveIntensity: 2`);
+                    
+                    // Animação de entrada
+                    shapeEl.emit('show');
+                    
+                    // Fala
                     await speak(etapa.t);
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 1500));
+                    
+                    // Animação de saída
+                    shapeEl.emit('hide');
+                    await new Promise(r => setTimeout(r, 600));
                 }
-
-                neonText.setAttribute('value', '');
+                
+                status.innerText = "FLUXO CONCLUÍDO";
                 core.setAttribute('material', 'color', '#00FFFF');
-
-            } catch (err) {
-                console.error(err);
-                await speak("O Vazio oscilou. Reequilibrando conexão.");
+                textEl.setAttribute('value', '');
+            } catch(e) {
+                status.innerText = "CONEXÃO NEURAL OSCILOU";
+                await speak("O Vazio oscilou. Reequilibrando.");
                 core.setAttribute('material', 'color', '#00FFFF');
             }
-        }
+        };
 
-        recognition.onend = () => { if(core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF'); };
+        recognition.onend = () => {
+            if(core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF');
+        };
     </script>
 </body>
 </html>
