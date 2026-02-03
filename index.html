@@ -2,63 +2,56 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXXIX (Conexão Neural)</title>
+    <title>VOID - Etapa XL</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #setup-panel {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 10000; background: #000; color: #00FFFF; display: flex;
             flex-direction: column; align-items: center; justify-content: center;
-            font-family: 'Courier New', monospace;
+            font-family: 'Courier New', monospace; text-align: center;
         }
-        button {
-            background: #00FFFF; border: none; padding: 25px 50px;
-            font-weight: bold; cursor: pointer; border-radius: 50px; font-size: 1.5em;
-            box-shadow: 0 0 20px #00FFFF;
+        #start-btn {
+            background: none; border: 2px solid #00FFFF; padding: 30px 60px;
+            color: #00FFFF; font-weight: bold; cursor: pointer; border-radius: 5px;
+            font-size: 1.5em; box-shadow: 0 0 15px #00FFFF;
         }
     </style>
 </head>
 <body>
 
     <div id="setup-panel">
-        <h1 style="letter-spacing: 10px;">VOID</h1>
-        <p>AGUARDANDO CONEXÃO NEURAL...</p>
-        <button id="start-btn">INICIAR FLUXO</button>
+        <h1 style="letter-spacing: 15px; margin-bottom: 50px;">VOID</h1>
+        <button id="start-btn">INICIAR PROTOCOLO</button>
+        <p id="status" style="margin-top: 20px; font-size: 0.8em; opacity: 0.6;">Aguardando interação humana...</p>
     </div>
 
     <a-scene background="color: #000000">
         <a-entity id="void-core" class="clickable"
-                  geometry="primitive: sphere; radius: 0.08" 
+                  geometry="primitive: sphere; radius: 0.1" 
                   material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
-                  animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 3000; loop: true">
+                  animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 2000; loop: true">
         </a-entity>
 
         <a-entity id="manifestation-group" position="0 1.5 -2">
-            <a-text id="neon-text" value="" align="center" position="0 0.5 0" scale="3 3 3"
-                    font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
-                    animation__fade="property: text.opacity; from: 0; to: 1; dur: 1000; startEvents: show"
-                    animation__hide="property: text.opacity; from: 1; to: 0; dur: 1000; startEvents: hide">
-            </a-text>
-            
-            <a-entity id="neon-shape" scale="0 0 0"
-                      animation__pop="property: scale; from: 0 0 0; to: 1 1 1; dur: 1000; startEvents: show"
-                      animation__out="property: scale; from: 1 1 1; to: 0 0 0; dur: 1000; startEvents: hide">
-            </a-entity>
+            <a-text id="neon-text" value="" align="center" position="0 0.6 0" scale="3 3 3"
+                    font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt" opacity="0"></a-text>
+            <a-entity id="neon-shape" scale="0 0 0"></a-entity>
         </a-entity>
 
-        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
+        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor></a-camera>
     </a-scene>
 
     <script>
-        const API_KEY = localStorage.getItem('gemini_key') || prompt("API Key:");
+        const API_KEY = localStorage.getItem('gemini_key') || prompt("Cole sua API Key:");
         if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
         const core = document.querySelector('#void-core');
-        const neonText = document.querySelector('#neon-text');
-        const neonShape = document.querySelector('#neon-shape');
         const setupPanel = document.querySelector('#setup-panel');
+        const status = document.querySelector('#status');
 
+        // --- ENGINE DE VOZ ---
         const speak = (text) => {
             return new Promise((resolve) => {
                 window.speechSynthesis.cancel();
@@ -69,73 +62,95 @@
             });
         };
 
+        // --- RECONHECIMENTO PRÉ-CONFIGURADO ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.interimResults = false;
+
+        // BOTÃO INICIAL: O "Aperto de Mão"
         document.querySelector('#start-btn').onclick = async () => {
-            await speak("Conexão estabelecida. O Vazio está pronto.");
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            setupPanel.style.display = 'none';
+            status.innerText = "Sincronizando áudio...";
+            await speak("Conexão neural iniciada.");
+            
+            try {
+                // Pedimos o microfone e já testamos o reconhecimento
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                window.localStream = stream; // Trava o microfone aberto
+                
+                setupPanel.style.display = 'none';
+            } catch (e) {
+                status.innerText = "ERRO: Microfone bloqueado pelo sistema.";
+            }
         };
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-
-        core.addEventListener('click', () => {
-            recognition.start();
-            core.setAttribute('material', 'color', '#FF00FF');
+        // EVENTO DE CLIQUE NA ESFERA
+        core.addEventListener('mousedown', () => {
+            try {
+                recognition.start();
+                core.setAttribute('material', 'color', '#FF00FF'); // Magenta = Gravando
+            } catch (e) {
+                recognition.stop();
+            }
         });
 
         recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript.toLowerCase();
-            core.setAttribute('material', 'color', '#FFFF00');
+            const transcript = event.results[0][0].transcript;
+            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Pensando
             
-            // O PROMPT GENERATIVO: Pede o plano de aula completo
-            const promptNeural = `Crie uma aula curta (3 letras) sobre "${transcript}". 
-            Responda APENAS um JSON: [{"l": "Letra", "shape": "box|sphere|torus", "color": "#hex", "t": "Frase didática"}].`;
+            await processarPrompt(transcript);
+        };
 
-            try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ contents: [{ parts: [{ text: promptNeural }] }] })
-                });
-                
-                const data = await res.json();
-                let raw = data.candidates[0].content.parts[0].text;
-                const cleanJson = raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1);
-                const aula = JSON.parse(cleanJson);
-                
-                executarFluxoNeural(aula);
-            } catch (e) {
-                speak("Falha na conexão neural. Tente novamente.");
+        recognition.onend = () => {
+            // Se a cor for magenta, significa que ele parou sem resultado
+            if (core.getAttribute('material').color === '#FF00FF') {
                 core.setAttribute('material', 'color', '#00FFFF');
             }
         };
 
-        async function executarFluxoNeural(lista) {
-            for (let item of lista) {
-                // 1. Manifestação
-                neonText.setAttribute('value', item.l);
-                neonText.setAttribute('color', item.color);
-                neonShape.setAttribute('geometry', `primitive: ${item.shape}; radius: 0.3; width: 0.4; height: 0.4; depth: 0.4`);
-                neonShape.setAttribute('material', `color: ${item.color}; shader: flat; emissive: ${item.color}; emissiveIntensity: 2`);
-                
-                // Gatilhos de animação
-                neonText.emit('show');
-                neonShape.emit('show');
-                
-                // 2. Explicação (Espera a fala terminar)
-                await speak(item.t);
-                
-                // 3. Tempo de contemplação
-                await new Promise(r => setTimeout(r, 2000));
-                
-                // 4. Desmaterialização
-                neonText.emit('hide');
-                neonShape.emit('hide');
-                await new Promise(r => setTimeout(r, 1100)); // Espera o fade-out
-            }
+        async function processarPrompt(texto) {
+            const prompt = `Crie uma aula de 3 etapas sobre "${texto}". Responda APENAS um array JSON: [{"l": "Letra/Sigla", "shape": "box|sphere|torus", "color": "#hex", "t": "Explicação"}].`;
             
-            speak("Fluxo concluído. O que mais deseja manifestar?");
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await res.json();
+                const raw = data.candidates[0].content.parts[0].text;
+                const json = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+                
+                await fluxoManifestacao(json);
+            } catch (e) {
+                await speak("O Vazio não conseguiu processar sua intenção.");
+                core.setAttribute('material', 'color', '#00FFFF');
+            }
+        }
+
+        async function fluxoManifestacao(aula) {
+            const textEl = document.querySelector('#neon-text');
+            const shapeEl = document.querySelector('#neon-shape');
+
+            for (let fase of aula) {
+                // Configura
+                textEl.setAttribute('value', fase.l);
+                textEl.setAttribute('color', fase.color);
+                shapeEl.setAttribute('geometry', `primitive: ${fase.shape}; radius: 0.2; width: 0.3; height: 0.3; depth: 0.3`);
+                shapeEl.setAttribute('material', `color: ${fase.color}; shader: flat; emissive: ${fase.color}; emissiveIntensity: 2`);
+                
+                // Aparece
+                textEl.setAttribute('opacity', '1');
+                shapeEl.setAttribute('scale', '1 1 1');
+                
+                await speak(fase.t);
+                await new Promise(r => setTimeout(r, 1500)); // Contemplação
+                
+                // Desaparece
+                textEl.setAttribute('opacity', '0');
+                shapeEl.setAttribute('scale', '0 0 0');
+                await new Promise(r => setTimeout(r, 500));
+            }
             core.setAttribute('material', 'color', '#00FFFF');
         }
     </script>
