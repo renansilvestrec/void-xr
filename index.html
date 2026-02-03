@@ -17,7 +17,16 @@
     </a-scene>
 
     <script>
-        const API_KEY = 'AIzaSyCwZ0Gx1ejB5qwBK6VaYr7dWoYt60QL4ww'; 
+                // O site vai pedir a chave quando você abrir no Quest
+        // Você cola a chave uma vez e ela funciona até você fechar a aba
+        let API_KEY = localStorage.getItem('gemini_key');
+        
+        if (!API_KEY) {
+            API_KEY = prompt("Por favor, cole sua API Key do Gemini aqui:");
+            if (API_KEY) {
+                localStorage.setItem('gemini_key', API_KEY);
+            }
+        }
         const core = document.querySelector('#void-core');
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
