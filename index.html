@@ -2,110 +2,120 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXXII</title>
+    <title>VOID - Etapa XXXIII (Resgate)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+    <style>
+        #setup-panel {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 10000; background: #222; color: #00FFFF; padding: 20px;
+            border: 2px solid #00FFFF; border-radius: 10px; text-align: center;
+            font-family: sans-serif; box-shadow: 0 0 20px #00FFFF;
+        }
+        button {
+            background: #00FFFF; border: none; padding: 10px 20px;
+            font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:15px; background:#00FFFF; border:none; font-weight:bold; border-radius:8px;">1. ATIVAR MICROFONE</button>
+
+    <div id="setup-panel">
+        <h3>VOID: Configuração de Sistema</h3>
+        <p>Clique no botão para liberar Áudio e Microfone</p>
+        <button id="start-btn">ATIVAR VOZ E MICROFONE</button>
+    </div>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" 
                   class="clickable"
                   geometry="primitive: sphere; radius: 0.2" 
                   material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2"
-                  event-set__mouseenter="_event: mouseenter; material.color: #FFFFFF"
-                  event-set__mouseleave="_event: mouseleave; material.color: #00FFFF">
+                  position="0 1.5 -2">
         </a-entity>
-
         <a-camera position="0 1.6 0"><a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor></a-camera>
         <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
     </a-scene>
 
     <script>
-        let API_KEY = localStorage.getItem('gemini_key');
-        if (!API_KEY) {
-            API_KEY = prompt("API Key:");
-            if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
-        }
+        const API_KEY = localStorage.getItem('gemini_key') || prompt("Cole sua API Key:");
+        if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
         const core = document.querySelector('#void-core');
-        const unlockBtn = document.querySelector('#audio-unlock');
+        const setupPanel = document.querySelector('#setup-panel');
+        const startBtn = document.querySelector('#start-btn');
 
+        // --- SISTEMA DE FALA ---
         const speak = (text) => {
-            if (!window.speechSynthesis) return;
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'pt-BR';
             window.speechSynthesis.speak(utterance);
         };
 
-        // Força a ativação do áudio e microfone no clique inicial
-        unlockBtn.onclick = async () => {
+        // --- INICIALIZAÇÃO CRÍTICA ---
+        startBtn.onclick = async () => {
+            // 1. Destrava Áudio
+            speak("Sistema de áudio online.");
+            
+            // 2. Destrava Microfone
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Mantemos o stream aberto para "acordar" o hardware
-                window.localStream = stream; 
-                speak("Microfone pronto para VR.");
-                unlockBtn.style.background = "#00FF00";
-                unlockBtn.innerText = "PRONTO! ENTRE NO VR";
+                window.audioStream = stream; // Mantém ativo
+                setupPanel.style.display = 'none'; // Só fecha se tudo der certo
             } catch (e) {
-                unlockBtn.innerText = "ERRO DE PERMISSÃO";
+                alert("Erro ao ativar microfone. Verifique as permissões do navegador.");
             }
         };
 
+        // --- RECONHECIMENTO DE VOZ ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition = new SpeechRecognition();
+        if (!SpeechRecognition) {
+            alert("Este navegador não suporta reconhecimento de voz.");
+        }
+        
+        const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
-        recognition.continuous = false; 
-        recognition.interimResults = false;
+        recognition.continuous = false;
+
+        // Ao clicar na esfera
+        core.addEventListener('click', () => {
+            try {
+                recognition.start();
+                core.setAttribute('material', 'color', '#FF00FF'); // Magenta (Ouvindo)
+            } catch (e) {
+                recognition.stop();
+                console.log("Reiniciando reconhecimento...");
+            }
+        });
 
         recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
-            
+            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo (Pensando)
+
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto: ${transcript}.` }] }] })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto e direto: ${transcript}` }] }] })
                 });
                 const data = await response.json();
-                if (data.candidates) {
-                    const aiText = data.candidates[0].content.parts[0].text;
-                    core.setAttribute('material', 'color', '#00FFFF');
-                    speak(aiText);
-                }
+                const aiResponse = data.candidates[0].content.parts[0].text;
+                
+                core.setAttribute('material', 'color', '#00FFFF'); // Volta ao Ciano
+                speak(aiResponse);
             } catch (err) {
-                core.setAttribute('material', 'color', '#FF0000');
+                core.setAttribute('material', 'color', '#FF0000'); // Erro
+                speak("Erro na conexão com a inteligência artificial.");
             }
         };
 
-        // Se o reconhecimento fechar sozinho, voltamos para ciano
+        // Segurança: Se o reconhecimento parar sem resultado, volta a cor original
         recognition.onend = () => {
-            if(core.getAttribute('material').color === '#FF00FF') {
-                console.log("Reconhecimento fechou prematuramente.");
+            if (core.getAttribute('material').color === '#FF00FF') {
                 core.setAttribute('material', 'color', '#00FFFF');
             }
         };
-
-        core.addEventListener('click', () => {
-            // Se já estiver magenta, não faz nada
-            if (core.getAttribute('material').color === '#FF00FF') return;
-
-            // Pequeno delay para evitar conflito com o evento de clique do VR
-            setTimeout(() => {
-                try {
-                    recognition.start();
-                    core.setAttribute('material', 'color', '#FF00FF'); 
-                } catch (e) {
-                    recognition.stop();
-                    console.log("Reiniciando...");
-                }
-            }, 250);
-        });
     </script>
 </body>
 </html>
