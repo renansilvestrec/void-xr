@@ -2,47 +2,48 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXXIII (Resgate)</title>
+    <title>VOID - Etapa XXXV (Professor de Neon)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <style>
-        #setup-panel {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 10000; background: #222; color: #00FFFF; padding: 20px;
-            border: 2px solid #00FFFF; border-radius: 10px; text-align: center;
-            font-family: sans-serif; box-shadow: 0 0 20px #00FFFF;
-        }
-        button {
-            background: #00FFFF; border: none; padding: 10px 20px;
-            font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px;
-        }
-    </style>
+    <script src="https://unpkg.com/aframe-ar/dist/aframe-ar.min.js"></script>
 </head>
 <body>
 
-    <div id="setup-panel">
-        <h3>VOID: Configuração de Sistema</h3>
-        <p>Clique no botão para liberar Áudio e Microfone</p>
-        <button id="start-btn">ATIVAR VOZ E MICROFONE</button>
+    <div id="setup-panel" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; background: #222; color: #00FFFF; padding: 20px; border: 2px solid #00FFFF; border-radius: 10px; text-align: center; font-family: sans-serif; box-shadow: 0 0 20px #00FFFF;">
+        <h3>VOID: Professor de Neon</h3>
+        <p>Clique para iniciar a AR e diga "Professor, me ensine o alfabeto."</p>
+        <button id="start-ar-btn" style="background: #00FFFF; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px;">INICIAR AULA</button>
     </div>
 
-    <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
-        <a-entity id="void-core" 
-                  class="clickable"
-                  geometry="primitive: sphere; radius: 0.2" 
-                  material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2">
-        </a-entity>
-        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor></a-camera>
-        <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
+    <a-scene ar-mode-ui="enabled: false" vr-mode-ui="enabled: false" embedded gesture-detector light="defaultLightsEnabled: false">
+        <a-entity camera position="0 1.6 0" gesture-detector></a-entity> 
+        
+        <a-light type="ambient" color="#FFF" intensity="0.8"></a-light>
+        <a-light type="directional" color="#FFF" intensity="0.2" position="1 1 -1"></a-light>
+
+        <a-text id="neon-letter" 
+                value="" 
+                color="#00FFFF" 
+                position="0 1.5 -0.8" 
+                scale="0.8 0.8 0.8"
+                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt" 
+                shader="msdf" 
+                negate="false"
+                material="shader: flat; emissive: #00FFFF; emissiveIntensity: 2.5; transparent: true; opacity: 1.0">
+        </a-text>
+
+        <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
     </a-scene>
 
     <script>
         const API_KEY = localStorage.getItem('gemini_key') || prompt("Cole sua API Key:");
         if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
-        const core = document.querySelector('#void-core');
+        const neonLetter = document.querySelector('#neon-letter');
         const setupPanel = document.querySelector('#setup-panel');
-        const startBtn = document.querySelector('#start-btn');
+        const startArBtn = document.querySelector('#start-ar-btn');
+
+        let alphabetQueue = []; // Fila de letras para exibir
+        let currentLetterIndex = 0;
 
         // --- SISTEMA DE FALA ---
         const speak = (text) => {
@@ -52,36 +53,38 @@
             window.speechSynthesis.speak(utterance);
         };
 
-        // --- INICIALIZAÇÃO CRÍTICA ---
-        startBtn.onclick = async () => {
-            // 1. Destrava Áudio
-            speak("Sistema de áudio online.");
+        // --- INICIALIZAÇÃO AR E MICROFONE ---
+        startArBtn.onclick = async () => {
+            speak("Realidade Aumentada e microfone prontos. Diga 'Professor, me ensine o alfabeto' para começar.");
             
-            // 2. Destrava Microfone
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                window.audioStream = stream; // Mantém ativo
-                setupPanel.style.display = 'none'; // Só fecha se tudo der certo
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                window.localStream = stream;
+                setupPanel.style.display = 'none';
+                document.querySelector('a-scene').setAttribute('ar-mode-ui', 'enabled: true');
             } catch (e) {
-                alert("Erro ao ativar microfone. Verifique as permissões do navegador.");
+                alert("Erro ao ativar câmera/microfone: " + e.message + ". Certifique-se de permitir o acesso.");
             }
         };
 
         // --- RECONHECIMENTO DE VOZ ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert("Este navegador não suporta reconhecimento de voz.");
-        }
-        
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
         recognition.continuous = false;
 
-        // Ao clicar na esfera
-        core.addEventListener('click', () => {
+        neonLetter.addEventListener('click', () => {
+            // Se já estamos exibindo o alfabeto, avançar para a próxima letra
+            if (alphabetQueue.length > 0 && currentLetterIndex < alphabetQueue.length) {
+                displayNextLetter();
+                return;
+            }
+
+            // Caso contrário, iniciar reconhecimento para um novo prompt
             try {
                 recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); // Magenta (Ouvindo)
+                neonLetter.setAttribute('material', 'emissive', '#FF00FF'); // Magenta = Ouvindo
+                speak("Estou a ouvir."); // Feedback de que está a ouvir
             } catch (e) {
                 recognition.stop();
                 console.log("Reiniciando reconhecimento...");
@@ -89,32 +92,109 @@
         });
 
         recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo (Pensando)
+            const transcript = event.results[0][0].transcript.toLowerCase();
+            neonLetter.setAttribute('material', 'emissive', '#FFFF00'); // Amarelo = Processando
+            speak("A processar...");
 
+            if (transcript.includes("me ensine o alfabeto") || transcript.includes("alfabeto")) {
+                await fetchAlphabetFromGemini();
+            } else {
+                // Se não for sobre o alfabeto, ainda pode responder a prompts gerais
+                await fetchGeneralResponseFromGemini(transcript);
+            }
+        };
+
+        async function fetchAlphabetFromGemini() {
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+                
+                const promptText = `Gere uma lista JSON de todas as letras do alfabeto (A-Z) em maiúsculas, com uma frase curta para ensinar cada letra. Exemplo: [{"letter": "A", "teaching": "A de Avião."}, {"letter": "B", "teaching": "B de Bola."}]`;
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto e direto: ${transcript}` }] }] })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                });
+                const data = await response.json();
+                const geminiResponseText = data.candidates[0].content.parts[0].text;
+                
+                let parsedAlphabet = [];
+                try {
+                    parsedAlphabet = JSON.parse(geminiResponseText.replace(/```json|```/g, '').trim());
+                    alphabetQueue = parsedAlphabet;
+                    currentLetterIndex = 0;
+                    displayNextLetter(); // Começar a exibir a primeira letra
+                } catch (parseError) {
+                    console.error("Erro ao fazer parse do JSON do alfabeto:", parseError);
+                    speak("Não consegui preparar o alfabeto. Tente novamente.");
+                    resetNeonLetter();
+                    return;
+                }
+
+            } catch (err) {
+                console.error("Erro na comunicação com Gemini para alfabeto:", err);
+                speak("Desculpe, tive um problema ao buscar o alfabeto.");
+                resetNeonLetter();
+            }
+        }
+
+        async function fetchGeneralResponseFromGemini(transcript) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+                
+                const promptText = `Responda de forma curta e direta sobre "${transcript}".`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
                 });
                 const data = await response.json();
                 const aiResponse = data.candidates[0].content.parts[0].text;
                 
-                core.setAttribute('material', 'color', '#00FFFF'); // Volta ao Ciano
                 speak(aiResponse);
+                resetNeonLetter();
+
             } catch (err) {
-                core.setAttribute('material', 'color', '#FF0000'); // Erro
-                speak("Erro na conexão com a inteligência artificial.");
+                console.error("Erro na comunicação com Gemini para resposta geral:", err);
+                speak("Desculpe, tive um problema ao processar sua pergunta.");
+                resetNeonLetter();
+            }
+        }
+
+        function displayNextLetter() {
+            if (currentLetterIndex < alphabetQueue.length) {
+                const letterData = alphabetQueue[currentLetterIndex];
+                neonLetter.setAttribute('value', letterData.letter);
+                neonLetter.setAttribute('material', 'emissive', '#00FF00'); // Verde Neon
+                speak(letterData.teaching);
+                currentLetterIndex++;
+            } else {
+                speak("O alfabeto foi concluído. Quer que eu o ensine novamente?");
+                resetNeonLetter();
+                alphabetQueue = []; // Limpa a fila
+                currentLetterIndex = 0;
+            }
+        }
+
+        function resetNeonLetter() {
+            neonLetter.setAttribute('value', ''); // Limpa o texto
+            neonLetter.setAttribute('material', 'emissive', '#00FFFF'); // Volta ao ciano padrão
+        }
+
+        // Reseta a cor se o reconhecimento de voz parar sem resultado
+        recognition.onend = () => {
+            if (neonLetter.getAttribute('material').emissive.startsWith('#FF00FF')) { // Se estava magenta (ouvindo)
+                neonLetter.setAttribute('material', 'emissive', '#00FFFF');
+                speak("Não entendi. Tente novamente ou clique na letra para a próxima.");
             }
         };
 
-        // Segurança: Se o reconhecimento parar sem resultado, volta a cor original
-        recognition.onend = () => {
-            if (core.getAttribute('material').color === '#FF00FF') {
-                core.setAttribute('material', 'color', '#00FFFF');
-            }
+        // Se houver um erro no reconhecimento, também reseta
+        recognition.onerror = (event) => {
+            console.error("Erro no reconhecimento de voz:", event.error);
+            resetNeonLetter();
+            speak("Erro no microfone. Tente novamente.");
         };
     </script>
 </body>
