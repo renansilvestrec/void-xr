@@ -1,52 +1,61 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>VOID - Etapa 2</title>
+<head>
+    <title>VOID - Etapa 3 (Gemini Integration)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  </head>
-  <body>
+</head>
+<body>
     <a-scene background="color: #000000">
-      
-      <a-entity id="void-core" 
-                geometry="primitive: sphere; radius: 0.05" 
-                material="color: #00FFFF; shader: flat" 
-                position="0 1.5 -2"
-                animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 2000; loop: true">
-      </a-entity>
-
-      <a-camera position="0 1.6 0">
-        <a-cursor color="#00FFFF" radius-inner="0.002" radius-outer="0.003"></a-cursor>
-      </a-camera>
-
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
+        <a-entity id="void-core" geometry="primitive: sphere; radius: 0.1" 
+                  material="color: #00FFFF; shader: flat" position="0 1.5 -2"
+                  animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; dur: 1000; loop: true">
+        </a-entity>
+        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
     </a-scene>
 
     <script>
-      // Lógica de Voz
-      const core = document.querySelector('#void-core');
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      
-      recognition.lang = 'pt-BR';
-      recognition.continuous = false;
+        const API_KEY = AIzaSyDTT1_qm8xu-8F8ymaVSnmutMeRVYjqZII; // Substitua aqui
+        const core = document.querySelector('#void-core');
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'pt-BR';
 
-      // Inicia o reconhecimento ao clicar na tela (ou gatilho do Quest)
-      document.body.onmousedown = () => {
-        recognition.start();
-        core.setAttribute('material', 'color', '#FF00FF'); // Muda para Magenta ao ouvir
-      };
+        document.body.onmousedown = () => {
+            recognition.start();
+            core.setAttribute('material', 'color', '#FF00FF'); // Ouvindo...
+        };
 
-      recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        console.log("Você disse: " + text);
-        core.setAttribute('material', 'color', '#00FF00'); // Verde quando entende
-        
-        // Aqui é onde enviaremos o 'text' para a API do Gemini na Etapa 3
-        alert("VOID ouviu: " + text); 
-      };
+        recognition.onresult = async (event) => {
+            const userText = event.results[0][0].transcript;
+            core.setAttribute('material', 'color', '#FFFF00'); // Pensando...
 
-      recognition.onend = () => {
-        setTimeout(() => core.setAttribute('material', 'color', '#00FFFF'), 2000);
-      };
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `Você é o sistema VOID. O usuário disse: "${userText}". Responda de forma curta (máximo 2 frases) e sugira uma cor em formato HEX que represente esse assunto no final da resposta como #000000.` }] }]
+                    })
+                });
+
+                const data = await response.json();
+                const aiResponse = data.candidates[0].content.parts[0].text;
+                
+                // Extrair cor e texto
+                const hexColor = aiResponse.match(/#[0-9A-F]{6}/i)?.[0] || '#00FF00';
+                
+                // Feedback Visual no Vazio
+                core.setAttribute('material', 'color', hexColor);
+                
+                // Síntese de Voz (O Vazio fala com você)
+                const utterance = new SpeechSynthesisUtterance(aiResponse.replace(hexColor, ''));
+                utterance.lang = 'pt-BR';
+                window.speechSynthesis.speak(utterance);
+
+            } catch (error) {
+                console.error("Erro na API:", error);
+                core.setAttribute('material', 'color', '#FF0000');
+            }
+        };
     </script>
-  </body>
+</body>
 </html>
