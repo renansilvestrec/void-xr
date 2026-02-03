@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXVIII (Hard Reset)</title>
+    <title>VOID - Etapa XXIX (Debug Voz)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
 </head>
 <body>
-    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:20px; background:#00FFFF;">ATIVAR SISTEMA</button>
+    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:20px; background:#00FFFF; border:none; border-radius:8px; font-weight:bold;">1. CLIQUE AQUI (PERMISSÃO)</button>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" 
@@ -21,7 +21,6 @@
 
         <a-camera position="0 1.6 0"><a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor></a-camera>
         <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
-        <a-entity laser-controls="hand: left" raycaster="objects: .clickable; far: 10"></a-entity>
     </a-scene>
 
     <script>
@@ -34,7 +33,7 @@
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // Função de fala simplificada
+        // Voz simples
         const speak = (t) => {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(t);
@@ -42,78 +41,62 @@
             window.speechSynthesis.speak(u);
         };
 
-        unlockBtn.onclick = () => { speak("Voz ativa"); unlockBtn.style.display='none'; };
-
-        // --- LÓGICA DE INTERAÇÃO REFORÇADA ---
-        let recognition = null;
-
-        const startNewRecognition = () => {
-            // Se já houver um, encerra e limpa
-            if (recognition) {
-                recognition.abort();
-                recognition = null;
+        // Ao clicar no botão, pedimos explicitamente o microfone antes do VR
+        unlockBtn.onclick = async () => {
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                speak("Microfone autorizado.");
+                unlockBtn.style.background = "#00FF00";
+                unlockBtn.innerText = "2. AGORA ENTRE NO VR";
+                // Não escondemos o botão imediatamente para você ver o sinal verde
+            } catch (e) {
+                alert("Erro ao acessar microfone: " + e.message);
             }
-
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.lang = 'pt-BR';
-            recognition.continuous = false;
-            recognition.interimResults = false;
-
-            recognition.onstart = () => {
-                core.setAttribute('material', 'color', '#FF00FF'); // Magenta
-                console.log("Iniciou microfone");
-            };
-
-            recognition.onresult = async (event) => {
-                const transcript = event.results[0][0].transcript;
-                core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
-                enviarParaIA(transcript);
-            };
-
-            recognition.onerror = (e) => {
-                console.error("Erro Voz:", e.error);
-                core.setAttribute('material', 'color', '#00FFFF');
-                if (e.error === 'not-allowed') alert("Acesso ao microfone negado. Verifique as permissões do Quest.");
-            };
-
-            recognition.onend = () => {
-                // Se terminou sem resultado e ainda está magenta, volta ao azul
-                if (core.getAttribute('material').color === '#FF00FF') {
-                    core.setAttribute('material', 'color', '#00FFFF');
-                }
-            };
-
-            recognition.start();
         };
 
-        const enviarParaIA = async (texto) => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = false;
+
+        core.addEventListener('click', () => {
+            recognition.stop();
+            setTimeout(() => {
+                recognition.start();
+                core.setAttribute('material', 'color', '#FF00FF'); // Magenta
+            }, 100);
+        });
+
+        recognition.onresult = async (event) => {
+            const transcript = event.results[0][0].transcript;
+            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
+            
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto: ${texto}. Cor HEX no fim.` }] }] })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: `Explique curto: ${transcript}. Cor HEX no fim.` }] }] })
                 });
-
                 const data = await response.json();
                 if (data.candidates) {
                     const aiText = data.candidates[0].content.parts[0].text;
                     const hex = aiText.match(/#[0-9A-F]{6}/i);
                     core.setAttribute('material', 'color', hex ? hex[0] : '#00FFFF');
                     speak(aiText.replace(/#[0-9A-F]{6}/gi, ''));
-                } else {
-                    core.setAttribute('material', 'color', '#00FFFF');
                 }
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
             }
         };
 
-        // Escuta o clique na esfera
-        core.addEventListener('click', () => {
-            startNewRecognition();
-        });
+        // Se o microfone parar por qualquer motivo (erro ou fim de fala)
+        recognition.onend = () => {
+            // Se não mudou para amarelo, volta para azul (indicando que não ouviu nada)
+            if (core.getAttribute('material').color === '#FF00FF') {
+                core.setAttribute('material', 'color', '#00FFFF');
+            }
+        };
     </script>
 </body>
 </html>
