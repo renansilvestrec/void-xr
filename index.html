@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XLII</title>
+    <title>VOID - Etapa XLIII</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #setup-panel {
@@ -12,28 +12,28 @@
             font-family: 'Courier New', monospace; text-align: center;
         }
         button {
-            background: #00FFFF; border: none; padding: 25px 50px;
-            font-weight: bold; cursor: pointer; border-radius: 5px; font-size: 1.2em;
-            box-shadow: 0 0 20px #00FFFF;
+            background: none; border: 2px solid #00FFFF; padding: 25px 50px;
+            color: #00FFFF; font-weight: bold; cursor: pointer; border-radius: 5px;
+            font-size: 1.2em; text-transform: uppercase; letter-spacing: 5px;
         }
     </style>
 </head>
 <body>
 
     <div id="setup-panel">
-        <h1 style="letter-spacing: 15px;">VOID</h1>
-        <button id="start-btn">SINCRONIZAR NEURÔNIOS</button>
+        <h1 style="letter-spacing: 20px; text-shadow: 0 0 15px #00FFFF;">VOID</h1>
+        <button id="start-btn">Sincronizar</button>
     </div>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" class="clickable"
-                  geometry="primitive: sphere; radius: 0.12" 
+                  geometry="primitive: sphere; radius: 0.1" 
                   material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
                   animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 2000; loop: true">
         </a-entity>
 
-        <a-text id="neon-text" value="" align="center" position="0 2.2 -2" scale="3 3 3"
+        <a-text id="neon-text" value="" align="center" position="0 2.3 -2" scale="3 3 3"
                 font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
                 material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2"></a-text>
 
@@ -41,26 +41,20 @@
     </a-scene>
 
     <script>
-        const API_KEY = localStorage.getItem('gemini_key') || prompt("API Key:");
+        const API_KEY = localStorage.getItem('gemini_key') || prompt("Chave Gemini:");
         if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
         const core = document.querySelector('#void-core');
-        const setupPanel = document.querySelector('#setup-panel');
         const neonText = document.querySelector('#neon-text');
+        const setupPanel = document.querySelector('#setup-panel');
 
-        // Seleção de voz aprimorada
-        const getBestVoice = () => {
-            const voices = window.speechSynthesis.getVoices();
-            return voices.find(v => v.lang.includes('pt-BR') && v.name.includes('Luciana')) || 
-                   voices.find(v => v.lang.includes('pt')) || 
-                   voices[0];
-        };
-
+        // VOZ - Busca agressiva por qualidade
         const speak = (text) => {
             return new Promise(resolve => {
                 window.speechSynthesis.cancel();
                 const u = new SpeechSynthesisUtterance(text);
-                u.voice = getBestVoice();
+                const vs = window.speechSynthesis.getVoices();
+                u.voice = vs.find(v => v.name.includes('Luciana') || v.name.includes('Google') && v.lang.includes('pt')) || vs.find(v => v.lang.includes('pt')) || vs[0];
                 u.lang = 'pt-BR';
                 u.rate = 1.0;
                 u.onend = resolve;
@@ -73,14 +67,11 @@
         recognition.lang = 'pt-BR';
 
         document.querySelector('#start-btn').onclick = async () => {
-            // "Acorda" as vozes (necessário no iOS)
-            window.speechSynthesis.getVoices();
-            await speak("Conexão neural estabelecida.");
+            await speak("Iniciando fluxo neural.");
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                window.audioStream = stream;
+                await navigator.mediaDevices.getUserMedia({ audio: true });
                 setupPanel.style.display = 'none';
-            } catch (e) { alert("Ative o microfone nas configurações do Safari."); }
+            } catch (e) { alert("Permita o microfone no Safari."); }
         };
 
         core.addEventListener('click', () => {
@@ -88,49 +79,53 @@
             recognition.start();
         });
 
-        recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript.toLowerCase();
+        recognition.onresult = async (e) => {
+            const t = e.results[0][0].transcript;
             core.setAttribute('material', 'color', '#FFFF00');
-            await processar(transcript);
+            await processar(t);
         };
 
-        async function processar(input) {
+        async function processar(msg) {
             try {
-                const prompt = `Aja como o sistema VOID. Ensine sobre "${input}" em 3 etapas curtas. Responda APENAS um array JSON: [{"l": "Símbolo", "t": "Explicação curta"}]. Não use markdown.`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
+                // Prompt rigoroso: JSON Puro sem explicações
+                const promptBody = {
+                    contents: [{ parts: [{ text: `Você é o sistema VOID. Gere uma aula de 3 partes sobre "${msg}". Responda APENAS um array JSON puro, sem markdown, sem texto antes ou depois: [{"l": "Símbolo", "t": "Explicação"}]` }] }]
+                };
+
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify(promptBody)
                 });
-                
-                const data = await res.json();
-                let rawText = data.candidates[0].content.parts[0].text;
-                
-                // Extração robusta do JSON
-                const jsonMatch = rawText.match(/\[.*\]/s);
-                if (!jsonMatch) throw new Error("JSON não encontrado");
-                
-                const aula = JSON.parse(jsonMatch[0]);
 
-                for (let fase of aula) {
-                    neonText.setAttribute('value', fase.l);
-                    await speak(fase.t);
-                    await new Promise(r => setTimeout(r, 1200));
-                }
+                const data = await res.json();
+                let raw = data.candidates[0].content.parts[0].text;
                 
+                // Extração de segurança se a IA falhar e mandar texto
+                const start = raw.indexOf('[');
+                const end = raw.lastIndexOf(']') + 1;
+                if (start === -1) throw new Error("No JSON");
+                const cleanJson = JSON.parse(raw.substring(start, end));
+
+                for (let etapa of cleanJson) {
+                    neonText.setAttribute('value', etapa.l);
+                    await speak(etapa.t);
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
                 neonText.setAttribute('value', '');
                 core.setAttribute('material', 'color', '#00FFFF');
-            } catch (e) {
-                console.error(e);
-                await speak("O Vazio oscilou. Tente novamente.");
+
+            } catch (err) {
+                console.error(err);
+                await speak("O Vazio oscilou. Reequilibrando conexão.");
                 core.setAttribute('material', 'color', '#00FFFF');
             }
         }
 
-        recognition.onend = () => {
-            if(core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF');
-        };
+        recognition.onend = () => { if(core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF'); };
     </script>
 </body>
 </html>
