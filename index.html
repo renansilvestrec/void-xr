@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXIV (Interação VR)</title>
+    <title>VOID - Etapa XXV (Gatilho Quest)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #audio-unlock {
@@ -22,7 +22,9 @@
                   geometry="primitive: sphere; radius: 0.15" 
                   material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
-                  animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true">
+                  animation__pulse="property: scale; to: 1.1 1.1 1.1; dir: alternate; dur: 1000; loop: true"
+                  event-set__mouseenter="_event: mouseenter; material.color: #FFFFFF"
+                  event-set__mouseleave="_event: mouseleave; material.color: #00FFFF">
         </a-entity>
 
         <a-camera position="0 1.6 0">
@@ -30,6 +32,7 @@
         </a-camera>
 
         <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
+        <a-entity laser-controls="hand: left" raycaster="objects: .clickable; far: 10"></a-entity>
     </a-scene>
 
     <script>
@@ -42,7 +45,7 @@
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // VOZES (Melhoradas para o POC)
+        // VOZES (Mantendo a lógica da Etapa XXII)
         let voices = [];
         const loadVoices = () => { voices = window.speechSynthesis.getVoices(); };
         window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -54,28 +57,29 @@
             const bestVoice = voices.find(v => (v.name.includes('Google') || v.name.includes('Premium')) && v.lang.includes('pt')) || voices.find(v => v.lang.includes('pt'));
             if (bestVoice) utterance.voice = bestVoice;
             utterance.lang = 'pt-BR';
-            utterance.rate = 1.0;
             window.speechSynthesis.speak(utterance);
         };
 
         unlockBtn.addEventListener('click', () => {
-            speakNatural("Áudio pronto para o Quest.");
+            speakNatural("Iniciando modo VR.");
             unlockBtn.style.display = 'none';
         });
 
-        // RECONHECIMENTO DE VOZ
+        // RECONHECIMENTO
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
 
-        const handleInteraction = () => {
+        const handleInteraction = (evt) => {
+            console.log("Interação detectada!");
             try {
                 recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); // Magenta = Gravando
-            } catch (e) { console.log("Aguardando..."); }
+                core.setAttribute('material', 'color', '#FF00FF'); 
+            } catch (e) { console.log("Reconhecimento já ativo"); }
         };
 
-        // Escuta o clique na esfera (Funciona para gatilho no VR e toque no iPhone)
+        // ESCUTADORES DE EVENTO UNIVERSAIS
+        // 'click' cobre o gatilho do Quest e o clique do mouse/toque no iPhone
         core.addEventListener('click', handleInteraction);
 
         recognition.onresult = async (event) => {
@@ -83,14 +87,14 @@
             core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Processando
 
             try {
-                // Modelo Gemini 3 Flash Preview
+                // Modelo validado no seu painel
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Responda de forma curta e didática: "${transcript}". No fim, cite uma cor HEX.` }] }]
+                        contents: [{ parts: [{ text: `Responda curto (1 frase) sobre "${transcript}". Termine com uma cor HEX.` }] }]
                     })
                 });
 
@@ -101,8 +105,7 @@
                     const hexColor = hexMatch ? hexMatch[0] : '#00FFFF';
 
                     core.setAttribute('material', 'color', hexColor);
-                    const cleanText = aiText.replace(/#[0-9A-F]{6}/gi, '').trim();
-                    speakNatural(cleanText);
+                    speakNatural(aiText.replace(/#[0-9A-F]{6}/gi, '').trim());
                 }
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
