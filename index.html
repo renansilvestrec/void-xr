@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa X</title>
+    <title>VOID - Etapa X1</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 </head>
 <body>
@@ -36,52 +36,54 @@
                 core.setAttribute('material', 'color', '#FF00FF'); // Magenta = Gravando
             } catch (e) { console.log("Reconhecimento já ativo"); }
         };
+recognition.onresult = async (event) => {
+    const transcript = event.results[0][0].transcript;
+    core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Processando
 
-        recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Processando
+    try {
+        // Usando o modelo estável 1.5-flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `Responda de forma curta (1 frase) sobre "${transcript}". Termine obrigatoriamente com uma cor HEX.`
+                    }]
+                }]
+            })
+        });
 
-            try {
-                // Endpoint estável v1beta
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `Responda de forma ultra curta (1 frase) sobre "${transcript}". Termine com uma cor HEX.`
-                            }]
-                        }]
-                    })
-                });
+        const data = await response.json();
 
-                const data = await response.json();
+        if (!response.ok) {
+            core.setAttribute('material', 'color', '#FF0000');
+            // Este alerta vai te dizer o motivo real do erro no Quest/iPhone
+            alert("Erro detalhado: " + (data.error ? data.error.message : "Desconhecido"));
+            console.error("Erro da API:", data);
+            return;
+        }
 
-                if (!response.ok) {
-                    // Se houver erro, a bolinha fica vermelha e o erro aparece no log
-                    core.setAttribute('material', 'color', '#FF0000');
-                    console.error("Erro API:", data);
-                    return;
-                }
+        const aiText = data.candidates[0].content.parts[0].text;
+        const hexMatch = aiText.match(/#[0-9A-F]{6}/i);
+        const hexColor = hexMatch ? hexMatch[0] : '#00FF00';
 
-                const aiText = data.candidates[0].content.parts[0].text;
-                const hexColor = aiText.match(/#[0-9A-F]{6}/i)?.[0] || '#00FF00';
+        // Sucesso: Aplica a cor e fala
+        core.setAttribute('material', 'color', hexColor);
+        
+        window.speechSynthesis.cancel();
+        const speech = new SpeechSynthesisUtterance(aiText.replace(hexColor, '').trim());
+        speech.lang = 'pt-BR';
+        window.speechSynthesis.speak(speech);
 
-                // Aplica a cor e fala o texto
-                core.setAttribute('material', 'color', hexColor);
-                
-                window.speechSynthesis.cancel();
-                const speech = new SpeechSynthesisUtterance(aiText.replace(hexColor, '').trim());
-                speech.lang = 'pt-BR';
-                window.speechSynthesis.speak(speech);
+    } catch (err) {
+        core.setAttribute('material', 'color', '#FF0000');
+        alert("Erro de conexão: " + err.message);
+    }
+};    
 
-            } catch (err) {
-                core.setAttribute('material', 'color', '#FF0000');
-                console.error("Falha na conexão:", err);
-            }
-        };
-    </script>
+</script>
 </body>
 </html>
