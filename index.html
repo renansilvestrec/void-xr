@@ -46,10 +46,17 @@
                 // Feedback Visual no Vazio
                 core.setAttribute('material', 'color', hexColor);
                 
+                               
                 // Síntese de Voz (O Vazio fala com você)
                 const utterance = new SpeechSynthesisUtterance(aiResponse.replace(hexColor, ''));
                 utterance.lang = 'pt-BR';
+                utterance.rate = 1.0; // Velocidade normal
+                
+                // Algumas versões do Safari precisam de um "empurrão"
+                window.speechSynthesis.cancel(); // Limpa filas travadas
                 window.speechSynthesis.speak(utterance);
+                
+                console.log("IA disse:", aiResponse); // Verifique no console do PC se está chegando o texto
 
             } catch (error) {
                 console.error("Erro na API:", error);
