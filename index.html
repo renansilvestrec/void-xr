@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXIX (Debug Voz)</title>
+    <title>VOID - Etapa XXX</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
 </head>
 <body>
-    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:20px; background:#00FFFF; border:none; border-radius:8px; font-weight:bold;">1. CLIQUE AQUI (PERMISSÃO)</button>
+    <button id="audio-unlock" style="position:fixed; z-index:9999; padding:15px; background:#00FFFF; border:none; font-weight:bold;">1. LIBERAR VOZ</button>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" 
@@ -33,70 +33,88 @@
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // Voz simples
-        const speak = (t) => {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(t);
-            u.lang = 'pt-BR';
-            window.speechSynthesis.speak(u);
+        // FUNÇÃO DE FALA PROTEGIDA
+        const speak = (text) => {
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel(); // Para falas anteriores
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'pt-BR';
+            utterance.onend = () => { console.log("Terminou de falar"); };
+            window.speechSynthesis.speak(utterance);
         };
 
-        // Ao clicar no botão, pedimos explicitamente o microfone antes do VR
+        // Solicita microfone e voz antes do VR
         unlockBtn.onclick = async () => {
             try {
-                await navigator.mediaDevices.getUserMedia({ audio: true });
-                speak("Microfone autorizado.");
-                unlockBtn.style.background = "#00FF00";
-                unlockBtn.innerText = "2. AGORA ENTRE NO VR";
-                // Não escondemos o botão imediatamente para você ver o sinal verde
-            } catch (e) {
-                alert("Erro ao acessar microfone: " + e.message);
-            }
-        };
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.continuous = false;
-
-        core.addEventListener('click', () => {
-            recognition.stop();
-            setTimeout(() => {
-                recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); // Magenta
-            }, 100);
-        });
-
-        recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
-            
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: `Explique curto: ${transcript}. Cor HEX no fim.` }] }] })
-                });
-                const data = await response.json();
-                if (data.candidates) {
-                    const aiText = data.candidates[0].content.parts[0].text;
-                    const hex = aiText.match(/#[0-9A-F]{6}/i);
-                    core.setAttribute('material', 'color', hex ? hex[0] : '#00FFFF');
-                    speak(aiText.replace(/#[0-9A-F]{6}/gi, ''));
+                // Tenta ativar síntese de voz com frase de teste
+                speak("Sistema de voz iniciado");
+                
+                // Pede microfone explicitamente
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    await navigator.mediaDevices.getUserMedia({ audio: true });
+                    unlockBtn.style.background = "#00FF00";
+                    unlockBtn.innerText = "SISTEMA PRONTO - ENTRE NO VR";
                 }
-            } catch (err) {
-                core.setAttribute('material', 'color', '#FF0000');
+            } catch (e) {
+                console.error(e);
+                unlockBtn.innerText = "ERRO MICROFONE";
             }
         };
 
-        // Se o microfone parar por qualquer motivo (erro ou fim de fala)
-        recognition.onend = () => {
-            // Se não mudou para amarelo, volta para azul (indicando que não ouviu nada)
-            if (core.getAttribute('material').color === '#FF00FF') {
-                core.setAttribute('material', 'color', '#00FFFF');
+        // RECONHECIMENTO DE VOZ
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.continuous = false;
+
+            recognition.onresult = async (event) => {
+                const transcript = event.results[0][0].transcript;
+                core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
+                
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: `Responda curto: ${transcript}. Cor HEX no fim.` }] }] })
+                    });
+                    const data = await response.json();
+                    if (data.candidates) {
+                        const aiText = data.candidates[0].content.parts[0].text;
+                        const hex = aiText.match(/#[0-9A-F]{6}/i);
+                        core.setAttribute('material', 'color', hex ? hex[0] : '#00FFFF');
+                        speak(aiText.replace(/#[0-9A-F]{6}/gi, ''));
+                    }
+                } catch (err) {
+                    core.setAttribute('material', 'color', '#FF0000');
+                }
+            };
+
+            recognition.onend = () => {
+                if (core.getAttribute('material').color === '#FF00FF') {
+                    core.setAttribute('material', 'color', '#00FFFF');
+                }
+            };
+        }
+
+        // EVENTO DE CLIQUE (Universal)
+        core.addEventListener('click', () => {
+            if (recognition) {
+                try {
+                    recognition.start();
+                    core.setAttribute('material', 'color', '#FF00FF'); // Magenta
+                } catch (e) {
+                    recognition.stop();
+                    console.log("Reiniciando reconhecimento...");
+                }
+            } else {
+                alert("Seu navegador não suporta reconhecimento de voz.");
             }
-        };
+        });
     </script>
 </body>
 </html>
