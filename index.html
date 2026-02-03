@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXIII (VR Ready)</title>
+    <title>VOID - Etapa XXIV (Interação VR)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #audio-unlock {
@@ -13,9 +13,10 @@
     </style>
 </head>
 <body>
-    <button id="audio-unlock">1. ATIVAR ÁUDIO (CLIQUE ANTES DO VR)</button>
+    <button id="audio-unlock">1. ATIVAR ÁUDIO (ANTES DO VR)</button>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+        
         <a-entity id="void-core" 
                   class="clickable"
                   geometry="primitive: sphere; radius: 0.15" 
@@ -27,6 +28,8 @@
         <a-camera position="0 1.6 0">
             <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
         </a-camera>
+
+        <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 10"></a-entity>
     </a-scene>
 
     <script>
@@ -39,7 +42,7 @@
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // VOZES
+        // VOZES (Melhoradas para o POC)
         let voices = [];
         const loadVoices = () => { voices = window.speechSynthesis.getVoices(); };
         window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -56,41 +59,38 @@
         };
 
         unlockBtn.addEventListener('click', () => {
-            speakNatural("Áudio pronto.");
+            speakNatural("Áudio pronto para o Quest.");
             unlockBtn.style.display = 'none';
         });
 
-        // RECONHECIMENTO
+        // RECONHECIMENTO DE VOZ
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
 
-        // FUNÇÃO DE ESCUTA (Unificada para Clique e VR)
-        const startListening = () => {
+        const handleInteraction = () => {
             try {
                 recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); 
-                console.log("Escutando...");
-            } catch (e) { console.log("Aguardando resultado..."); }
+                core.setAttribute('material', 'color', '#FF00FF'); // Magenta = Gravando
+            } catch (e) { console.log("Aguardando..."); }
         };
 
-        // EVENTOS:mousedown para iPhone e 'click' para Raycaster do VR
-        core.addEventListener('mousedown', startListening);
-        core.addEventListener('click', startListening);
+        // Escuta o clique na esfera (Funciona para gatilho no VR e toque no iPhone)
+        core.addEventListener('click', handleInteraction);
 
         recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); 
+            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Processando
 
             try {
-                // Modelo Gemini 3 Flash Preview (conforme painel do utilizador)
+                // Modelo Gemini 3 Flash Preview
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Responda curto (1 frase) sobre "${transcript}". Termine com uma cor HEX.` }] }]
+                        contents: [{ parts: [{ text: `Responda de forma curta e didática: "${transcript}". No fim, cite uma cor HEX.` }] }]
                     })
                 });
 
@@ -101,7 +101,8 @@
                     const hexColor = hexMatch ? hexMatch[0] : '#00FFFF';
 
                     core.setAttribute('material', 'color', hexColor);
-                    speakNatural(aiText.replace(/#[0-9A-F]{6}/gi, '').trim());
+                    const cleanText = aiText.replace(/#[0-9A-F]{6}/gi, '').trim();
+                    speakNatural(cleanText);
                 }
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
