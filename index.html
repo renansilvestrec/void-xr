@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XVI</title>
+    <title>VOID - Etapa XVII</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 </head>
 <body>
@@ -13,71 +13,106 @@
                   position="0 1.5 -2"
                   animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true">
         </a-entity>
-        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
+
+        <a-camera position="0 1.6 0">
+            <a-cursor color="#00FFFF"></a-cursor>
+        </a-camera>
     </a-scene>
 
     <script>
-        // Sistema de Chave Segura
+        // --- CONFIGURAÇÃO DE SEGURANÇA ---
         let API_KEY = localStorage.getItem('gemini_key');
-        if (!API_KEY) {
-            API_KEY = prompt("Cole sua API Key aqui (ela ficará salva apenas no seu óculos):");
-            if (API_KEY) localStorage.setItem('gemini_key', API_KEY);
+
+        if (!API_KEY || API_KEY === "null") {
+            API_KEY = prompt("Por favor, cole sua Gemini API Key:");
+            if (API_KEY && API_KEY.trim().length > 10) {
+                localStorage.setItem('gemini_key', API_KEY.trim());
+            } else {
+                alert("Chave inválida. Recarregue a página para tentar novamente.");
+            }
         }
 
         const core = document.querySelector('#void-core');
+
+        // --- RECONHECIMENTO DE VOZ ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
+        if (!SpeechRecognition) {
+            alert("Seu navegador não suporta reconhecimento de voz.");
+        } else {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.continuous = false;
 
-        document.body.onmousedown = () => {
-            try {
-                recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); 
-            } catch (e) { console.log("Ouvindo..."); }
-        };
-
-        recognition.onresult = async (event) => {
-            const transcript = event.results[0][0].transcript;
-            core.setAttribute('material', 'color', '#FFFF00'); 
-
-            try {
-                // URL configurada para o modelo Flash 1.5 (Padrão AI Studio Free)
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Responda curto (1 frase) sobre "${transcript}". Termine com uma cor HEX.` }] }]
-                    })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    core.setAttribute('material', 'color', '#FF0000');
-                    alert("Erro Gemini: " + (data.error ? data.error.message : "Verifique a chave"));
-                    // Se a chave estiver errada, limpa para pedir de novo na próxima vez
-                    if(response.status === 400) localStorage.removeItem('gemini_key');
-                    return;
+            // Iniciar gravação ao clicar/gatilho
+            document.body.onmousedown = () => {
+                try {
+                    recognition.start();
+                    core.setAttribute('material', 'color', '#FF00FF'); // Magenta = Gravando
+                    console.log("Iniciando escuta...");
+                } catch (e) { 
+                    console.log("Reconhecimento já está ativo."); 
                 }
+            };
 
-                const aiText = data.candidates[0].content.parts[0].text;
-                const hexMatch = aiText.match(/#[0-9A-F]{6}/i);
-                const hexColor = hexMatch ? hexMatch[0] : '#00FF00';
+            recognition.onresult = async (event) => {
+                const transcript = event.results[0][0].transcript;
+                console.log("Você disse:", transcript);
+                core.setAttribute('material', 'color', '#FFFF00'); // Amarelo = Pensando
 
-                core.setAttribute('material', 'color', hexColor);
-                
-                window.speechSynthesis.cancel();
-                const speech = new SpeechSynthesisUtterance(aiText.replace(hexColor, '').trim());
-                speech.lang = 'pt-BR';
-                window.speechSynthesis.speak(speech);
+                try {
+                    // Endpoint utilizando a versão v1beta e o modelo Flash 1.5
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `Responda de forma ultra curta (máximo 15 palavras) sobre: "${transcript}". No final da frase, inclua um código de cor HEX que combine com o assunto.`
+                                }]
+                            }]
+                        })
+                    });
 
-            } catch (err) {
-                core.setAttribute('material', 'color', '#FF0000');
-                alert("Erro Conexão: " + err.message);
-            }
-        };
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        core.setAttribute('material', 'color', '#FF0000'); // Vermelho = Erro
+                        const msgErro = data.error ? data.error.message : "Erro desconhecido";
+                        alert("Erro na API: " + msgErro);
+                        
+                        // Se o erro for de chave inválida (400), limpa o storage
+                        if (response.status === 400 || response.status === 403) {
+                            localStorage.removeItem('gemini_key');
+                            console.log("Chave inválida removida.");
+                        }
+                        return;
+                    }
+
+                    // Processar Resposta
+                    const aiText = data.candidates[0].content.parts[0].text;
+                    const hexMatch = aiText.match(/#[0-9A-F]{6}/i);
+                    const hexColor = hexMatch ? hexMatch[0] : '#00FF00';
+
+                    // Atualizar Esfera e Voz
+                    core.setAttribute('material', 'color', hexColor);
+                    
+                    window.speechSynthesis.cancel();
+                    const speech = new SpeechSynthesisUtterance(aiText.replace(hexColor, '').trim());
+                    speech.lang = 'pt-BR';
+                    window.speechSynthesis.speak(speech);
+
+                } catch (err) {
+                    core.setAttribute('material', 'color', '#FF0000');
+                    console.error("Erro de conexão:", err);
+                }
+            };
+
+            recognition.onerror = () => {
+                core.setAttribute('material', 'color', '#00FFFF'); // Volta ao Azul original
+            };
+        }
     </script>
 </body>
 </html>
