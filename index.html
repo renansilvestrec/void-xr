@@ -2,30 +2,34 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXII (Voz Melhorada)</title>
+    <title>VOID - Etapa XXIII (VR Ready)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #audio-unlock {
             position: fixed; top: 10px; left: 10px; z-index: 9999;
             padding: 15px; background: #00FFFF; border: none; border-radius: 5px;
-            font-weight: bold; cursor: pointer; font-family: sans-serif;
+            font-weight: bold; cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <button id="audio-unlock">ATIVAR ÁUDIO DA AULA</button>
+    <button id="audio-unlock">1. ATIVAR ÁUDIO (CLIQUE ANTES DO VR)</button>
 
-    <a-scene background="color: #000000">
+    <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" 
+                  class="clickable"
                   geometry="primitive: sphere; radius: 0.15" 
                   material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2">
+                  position="0 1.5 -2"
+                  animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true">
         </a-entity>
-        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
+
+        <a-camera position="0 1.6 0">
+            <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
+        </a-camera>
     </a-scene>
 
     <script>
-        // --- CONFIGURAÇÃO DA CHAVE E API ---
         let API_KEY = localStorage.getItem('gemini_key');
         if (!API_KEY) {
             API_KEY = prompt("Cole sua API Key:");
@@ -35,64 +39,58 @@
         const core = document.querySelector('#void-core');
         const unlockBtn = document.querySelector('#audio-unlock');
 
-        // --- SISTEMA DE VOZ APERFEIÇOADO ---
+        // VOZES
         let voices = [];
-        const loadVoices = () => {
-            voices = window.speechSynthesis.getVoices();
-        };
+        const loadVoices = () => { voices = window.speechSynthesis.getVoices(); };
         window.speechSynthesis.onvoiceschanged = loadVoices;
         loadVoices();
 
         const speakNatural = (text) => {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Busca por vozes de alta qualidade (Google ou Premium)
-            const bestVoice = voices.find(v => 
-                (v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Premium')) && 
-                v.lang.includes('pt')
-            ) || voices.find(v => v.lang.includes('pt'));
-
+            const bestVoice = voices.find(v => (v.name.includes('Google') || v.name.includes('Premium')) && v.lang.includes('pt')) || voices.find(v => v.lang.includes('pt'));
             if (bestVoice) utterance.voice = bestVoice;
-            
             utterance.lang = 'pt-BR';
-            utterance.rate = 0.95; // Levemente mais lento para clareza educacional
-            utterance.pitch = 1.0; // Tom neutro e agradável
-            utterance.volume = 1.0;
-            
+            utterance.rate = 1.0;
             window.speechSynthesis.speak(utterance);
         };
 
         unlockBtn.addEventListener('click', () => {
-            speakNatural("Sistema de áudio pronto para a aula.");
+            speakNatural("Áudio pronto.");
             unlockBtn.style.display = 'none';
         });
 
-        // --- RECONHECIMENTO E IA ---
+        // RECONHECIMENTO
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
 
-        document.body.onmousedown = () => {
+        // FUNÇÃO DE ESCUTA (Unificada para Clique e VR)
+        const startListening = () => {
             try {
                 recognition.start();
                 core.setAttribute('material', 'color', '#FF00FF'); 
-            } catch (e) {}
+                console.log("Escutando...");
+            } catch (e) { console.log("Aguardando resultado..."); }
         };
+
+        // EVENTOS:mousedown para iPhone e 'click' para Raycaster do VR
+        core.addEventListener('mousedown', startListening);
+        core.addEventListener('click', startListening);
 
         recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript;
             core.setAttribute('material', 'color', '#FFFF00'); 
 
             try {
-                // Modelo confirmado via print do AI Studio
+                // Modelo Gemini 3 Flash Preview (conforme painel do utilizador)
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Explique de forma didática e curta: "${transcript}". No fim, cite uma cor HEX.` }] }]
+                        contents: [{ parts: [{ text: `Responda curto (1 frase) sobre "${transcript}". Termine com uma cor HEX.` }] }]
                     })
                 });
 
@@ -103,14 +101,10 @@
                     const hexColor = hexMatch ? hexMatch[0] : '#00FFFF';
 
                     core.setAttribute('material', 'color', hexColor);
-                    
-                    // Remove o código HEX do áudio para não soar robótico
-                    const cleanText = aiText.replace(/#[0-9A-F]{6}/gi, '').trim();
-                    speakNatural(cleanText);
+                    speakNatural(aiText.replace(/#[0-9A-F]{6}/gi, '').trim());
                 }
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
-                console.error("Erro na requisição:", err);
             }
         };
     </script>
