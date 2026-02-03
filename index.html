@@ -2,10 +2,20 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XX</title>
+    <title>VOID - Etapa XXI</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+        /* Botão para forçar o desbloqueio do áudio no iOS */
+        #audio-unlock {
+            position: fixed; top: 10px; left: 10px; z-index: 9999;
+            padding: 15px; background: #00FFFF; border: none; border-radius: 5px;
+            font-weight: bold; cursor: pointer;
+        }
+    </style>
 </head>
 <body>
+    <button id="audio-unlock">CLIQUE AQUI PARA ATIVAR ÁUDIO</button>
+
     <a-scene background="color: #000000">
         <a-entity id="void-core" geometry="primitive: sphere; radius: 0.15" material="color: #00FFFF; shader: flat" position="0 1.5 -2"></a-entity>
         <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
@@ -19,19 +29,20 @@
         }
 
         const core = document.querySelector('#void-core');
+        const unlockBtn = document.querySelector('#audio-unlock');
+
+        // DESBLOQUEIO DE ÁUDIO OBRIGATÓRIO PARA IPHONE
+        unlockBtn.addEventListener('click', () => {
+            const utterance = new SpeechSynthesisUtterance("Áudio ativado");
+            utterance.lang = 'pt-BR';
+            utterance.volume = 1.0;
+            window.speechSynthesis.speak(utterance);
+            unlockBtn.style.display = 'none'; // Esconde após ativar
+        });
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
-
-        // AJUSTE PARA IPHONE: Ativa o motor de voz no primeiro clique
-        const unlockAudio = () => {
-            const msg = new SpeechSynthesisUtterance();
-            msg.volume = 0;
-            window.speechSynthesis.speak(msg);
-            console.log("Áudio desbloqueado para iOS");
-            document.removeEventListener('touchstart', unlockAudio);
-        };
-        document.addEventListener('touchstart', unlockAudio);
 
         document.body.onmousedown = () => {
             try {
@@ -45,7 +56,6 @@
             core.setAttribute('material', 'color', '#FFFF00'); 
 
             try {
-                // Modelo Gemini 3 Flash Preview detectado no seu painel
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
@@ -64,10 +74,11 @@
 
                     core.setAttribute('material', 'color', hexColor);
                     
-                    // Falar no iOS
+                    // REPRODUÇÃO DE VOZ
                     window.speechSynthesis.cancel();
                     const speech = new SpeechSynthesisUtterance(aiText.replace(/#[0-9A-F]{6}/gi, ''));
                     speech.lang = 'pt-BR';
+                    speech.volume = 1.0;
                     window.speechSynthesis.speak(speech);
                 }
             } catch (err) {
