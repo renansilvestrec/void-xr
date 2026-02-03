@@ -2,37 +2,40 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XLI</title>
+    <title>VOID - Etapa XLII</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #setup-panel {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 10000; background: #000; color: #00FFFF; display: flex;
             flex-direction: column; align-items: center; justify-content: center;
-            font-family: 'Courier New', monospace;
+            font-family: 'Courier New', monospace; text-align: center;
         }
         button {
             background: #00FFFF; border: none; padding: 25px 50px;
             font-weight: bold; cursor: pointer; border-radius: 5px; font-size: 1.2em;
+            box-shadow: 0 0 20px #00FFFF;
         }
     </style>
 </head>
 <body>
 
     <div id="setup-panel">
-        <h1 style="letter-spacing: 10px;">VOID</h1>
-        <button id="start-btn">CONECTAR NEURÔNIOS</button>
+        <h1 style="letter-spacing: 15px;">VOID</h1>
+        <button id="start-btn">SINCRONIZAR NEURÔNIOS</button>
     </div>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-entity id="void-core" class="clickable"
-                  geometry="primitive: sphere; radius: 0.15" 
+                  geometry="primitive: sphere; radius: 0.12" 
                   material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2">
+                  position="0 1.5 -2"
+                  animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 2000; loop: true">
         </a-entity>
 
-        <a-text id="neon-text" value="" align="center" position="0 2.2 -2" scale="2 2 2"
-                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"></a-text>
+        <a-text id="neon-text" value="" align="center" position="0 2.2 -2" scale="3 3 3"
+                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
+                material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2"></a-text>
 
         <a-camera position="0 1.6 0"></a-camera>
     </a-scene>
@@ -45,97 +48,89 @@
         const setupPanel = document.querySelector('#setup-panel');
         const neonText = document.querySelector('#neon-text');
 
-        // Inicializamos a API de voz vazia para "aquecer" o Safari
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition = SpeechRecognition ? new SpeechRecognition() : null;
-        if(recognition) {
-            recognition.lang = 'pt-BR';
-            recognition.continuous = false;
-        }
-
-        const speak = (text) => {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'pt-BR';
-            window.speechSynthesis.speak(u);
-            return new Promise(resolve => u.onend = resolve);
+        // Seleção de voz aprimorada
+        const getBestVoice = () => {
+            const voices = window.speechSynthesis.getVoices();
+            return voices.find(v => v.lang.includes('pt-BR') && v.name.includes('Luciana')) || 
+                   voices.find(v => v.lang.includes('pt')) || 
+                   voices[0];
         };
 
-        // O Safari SÓ libera microfone se o clique inicial for "forte"
+        const speak = (text) => {
+            return new Promise(resolve => {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.voice = getBestVoice();
+                u.lang = 'pt-BR';
+                u.rate = 1.0;
+                u.onend = resolve;
+                window.speechSynthesis.speak(u);
+            });
+        };
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+
         document.querySelector('#start-btn').onclick = async () => {
-            await speak("Interface ativada."); 
+            // "Acorda" as vozes (necessário no iOS)
+            window.speechSynthesis.getVoices();
+            await speak("Conexão neural estabelecida.");
             try {
-                // Tentativa forçada de microfone no clique do botão
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 window.audioStream = stream;
                 setupPanel.style.display = 'none';
-            } catch (e) {
-                alert("O Safari bloqueou o microfone. Vá em Ajustes > Safari > Microfone > Permitir.");
-            }
+            } catch (e) { alert("Ative o microfone nas configurações do Safari."); }
         };
 
-        // LÓGICA DA ESFERA
-        core.addEventListener('click', function() {
-            if (!recognition) return;
-
-            // Feedback visual imediato do clique
-            core.setAttribute('material', 'color', '#FF00FF'); 
-            
-            try {
-                recognition.start();
-                console.log("Escutando...");
-            } catch (e) {
-                recognition.stop();
-                setTimeout(() => recognition.start(), 100);
-            }
+        core.addEventListener('click', () => {
+            core.setAttribute('material', 'color', '#FF00FF');
+            recognition.start();
         });
 
         recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript.toLowerCase();
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
-            
-            await processarEManifestar(transcript);
+            core.setAttribute('material', 'color', '#FFFF00');
+            await processar(transcript);
         };
 
-        recognition.onerror = (e) => {
-            console.error("Erro voz:", e.error);
-            core.setAttribute('material', 'color', '#00FFFF');
-        };
-
-        recognition.onend = () => {
-            if (core.getAttribute('material').color === '#FF00FF') {
-                core.setAttribute('material', 'color', '#00FFFF');
-            }
-        };
-
-        async function processarEManifestar(promptUser) {
+        async function processar(input) {
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-                const res = await fetch(url, {
+                const prompt = `Aja como o sistema VOID. Ensine sobre "${input}" em 3 etapas curtas. Responda APENAS um array JSON: [{"l": "Símbolo", "t": "Explicação curta"}]. Não use markdown.`;
+                
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Aula curta de 2 etapas sobre "${promptUser}". Retorne APENAS um array JSON: [{"l": "LETRA", "t": "EXPLICAÇÃO"}]` }] }]
-                    })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                 });
                 
                 const data = await res.json();
-                const raw = data.candidates[0].content.parts[0].text;
-                const json = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+                let rawText = data.candidates[0].content.parts[0].text;
+                
+                // Extração robusta do JSON
+                const jsonMatch = rawText.match(/\[.*\]/s);
+                if (!jsonMatch) throw new Error("JSON não encontrado");
+                
+                const aula = JSON.parse(jsonMatch[0]);
 
-                for (let item of json) {
-                    neonText.setAttribute('value', item.l);
-                    await speak(item.t);
-                    await new Promise(r => setTimeout(r, 1000));
+                for (let fase of aula) {
+                    neonText.setAttribute('value', fase.l);
+                    await speak(fase.t);
+                    await new Promise(r => setTimeout(r, 1200));
                 }
                 
                 neonText.setAttribute('value', '');
                 core.setAttribute('material', 'color', '#00FFFF');
             } catch (e) {
+                console.error(e);
                 await speak("O Vazio oscilou. Tente novamente.");
                 core.setAttribute('material', 'color', '#00FFFF');
             }
         }
+
+        recognition.onend = () => {
+            if(core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF');
+        };
     </script>
 </body>
 </html>
