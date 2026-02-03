@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa 15</title>
+    <title>VOID - Etapa XVI</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 </head>
 <body>
@@ -17,18 +17,14 @@
     </a-scene>
 
     <script>
-                // O site vai pedir a chave quando você abrir no Quest
-        // Você cola a chave uma vez e ela funciona até você fechar a aba
+        // Sistema de Chave Segura
         let API_KEY = localStorage.getItem('gemini_key');
-        
         if (!API_KEY) {
-            API_KEY = prompt("Por favor, cole sua API Key do Gemini aqui:");
-            if (API_KEY) {
-                localStorage.setItem('gemini_key', API_KEY);
-            }
+            API_KEY = prompt("Cole sua API Key aqui (ela ficará salva apenas no seu óculos):");
+            if (API_KEY) localStorage.setItem('gemini_key', API_KEY);
         }
-        const core = document.querySelector('#void-core');
 
+        const core = document.querySelector('#void-core');
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
@@ -37,7 +33,7 @@
             try {
                 recognition.start();
                 core.setAttribute('material', 'color', '#FF00FF'); 
-            } catch (e) { console.log("Ativo"); }
+            } catch (e) { console.log("Ouvindo..."); }
         };
 
         recognition.onresult = async (event) => {
@@ -45,8 +41,8 @@
             core.setAttribute('material', 'color', '#FFFF00'); 
 
             try {
-                // ALTERADO PARA v1 (Versão Estável)
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`;
+                // URL configurada para o modelo Flash 1.5 (Padrão AI Studio Free)
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -60,7 +56,9 @@
 
                 if (!response.ok) {
                     core.setAttribute('material', 'color', '#FF0000');
-                    alert("Erro Gemini V1: " + (data.error ? data.error.message : "Desconhecido"));
+                    alert("Erro Gemini: " + (data.error ? data.error.message : "Verifique a chave"));
+                    // Se a chave estiver errada, limpa para pedir de novo na próxima vez
+                    if(response.status === 400) localStorage.removeItem('gemini_key');
                     return;
                 }
 
