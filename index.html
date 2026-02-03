@@ -2,24 +2,19 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XIX</title>
+    <title>VOID - Etapa XX</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 </head>
 <body>
     <a-scene background="color: #000000">
-        <a-entity id="void-core" 
-                  geometry="primitive: sphere; radius: 0.15" 
-                  material="color: #00FFFF; shader: flat" 
-                  position="0 1.5 -2"
-                  animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true">
-        </a-entity>
+        <a-entity id="void-core" geometry="primitive: sphere; radius: 0.15" material="color: #00FFFF; shader: flat" position="0 1.5 -2"></a-entity>
         <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
     </a-scene>
 
     <script>
         let API_KEY = localStorage.getItem('gemini_key');
-        if (!API_KEY || API_KEY === "null") {
-            API_KEY = prompt("Cole sua API Key aqui:");
+        if (!API_KEY) {
+            API_KEY = prompt("Cole sua API Key:");
             if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
         }
 
@@ -28,16 +23,21 @@
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
 
-        // Destrava o áudio no primeiro clique
-        document.body.addEventListener('mousedown', () => {
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-        }, { once: true });
+        // AJUSTE PARA IPHONE: Ativa o motor de voz no primeiro clique
+        const unlockAudio = () => {
+            const msg = new SpeechSynthesisUtterance();
+            msg.volume = 0;
+            window.speechSynthesis.speak(msg);
+            console.log("Áudio desbloqueado para iOS");
+            document.removeEventListener('touchstart', unlockAudio);
+        };
+        document.addEventListener('touchstart', unlockAudio);
 
         document.body.onmousedown = () => {
             try {
                 recognition.start();
                 core.setAttribute('material', 'color', '#FF00FF'); 
-            } catch (e) { console.log("Ouvindo..."); }
+            } catch (e) {}
         };
 
         recognition.onresult = async (event) => {
@@ -45,7 +45,7 @@
             core.setAttribute('material', 'color', '#FFFF00'); 
 
             try {
-                // USANDO O MODELO QUE APARECE NO SEU PAINEL: gemini-3-flash-preview
+                // Modelo Gemini 3 Flash Preview detectado no seu painel
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
                 
                 const response = await fetch(url, {
@@ -57,26 +57,21 @@
                 });
 
                 const data = await response.json();
-
-                if (data.candidates && data.candidates[0].content.parts[0].text) {
+                if (data.candidates) {
                     const aiText = data.candidates[0].content.parts[0].text;
                     const hexMatch = aiText.match(/#[0-9A-F]{6}/i);
                     const hexColor = hexMatch ? hexMatch[0] : '#00FF00';
 
                     core.setAttribute('material', 'color', hexColor);
                     
-                    // SÍNTESE DE VOZ REFORÇADA
+                    // Falar no iOS
                     window.speechSynthesis.cancel();
-                    const cleanText = aiText.replace(/#[0-9A-F]{6}/gi, '').trim();
-                    const speech = new SpeechSynthesisUtterance(cleanText);
+                    const speech = new SpeechSynthesisUtterance(aiText.replace(/#[0-9A-F]{6}/gi, ''));
                     speech.lang = 'pt-BR';
-                    speech.rate = 1.0;
                     window.speechSynthesis.speak(speech);
                 }
-
             } catch (err) {
                 core.setAttribute('material', 'color', '#FF0000');
-                console.error(err);
             }
         };
     </script>
