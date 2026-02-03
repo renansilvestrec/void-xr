@@ -2,26 +2,27 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXXVII</title>
+    <title>VOID - Etapa XXXVIII (Fix Final)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #setup-panel {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 10000; background: #000; color: #00FFFF; padding: 30px;
-            border: 2px solid #00FFFF; border-radius: 15px; text-align: center;
-            font-family: 'Courier New', monospace; box-shadow: 0 0 30px #00FFFF;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10000; background: #000; color: #00FFFF; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            font-family: 'Courier New', monospace;
         }
         button {
-            background: #00FFFF; border: none; padding: 15px 30px;
-            font-weight: bold; cursor: pointer; border-radius: 5px; color: #000;
+            background: #00FFFF; border: none; padding: 20px 40px;
+            font-weight: bold; cursor: pointer; border-radius: 10px; font-size: 1.2em;
         }
     </style>
 </head>
 <body>
 
     <div id="setup-panel">
-        <h2>VOID: INTERFACE ATIVA</h2>
-        <button id="start-btn">INICIAR SISTEMAS</button>
+        <h1 style="text-shadow: 0 0 10px #00FFFF;">VOID</h1>
+        <p>RESTAURANDO PROTOCOLOS DE AULA...</p>
+        <button id="start-btn">INICIAR INTERFACE</button>
     </div>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse">
@@ -29,20 +30,19 @@
                   geometry="primitive: sphere; radius: 0.15" 
                   material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
-                  animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; dur: 2000; loop: true">
+                  animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 1500; loop: true">
         </a-entity>
 
         <a-text id="neon-letter" value="" align="center" color="#FFFFFF" 
-                position="0 2.0 -2" scale="2 2 2"
-                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"></a-text>
+                position="0 2.1 -2" scale="2.5 2.5 2.5"
+                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
+                material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2"></a-text>
 
-        <a-camera position="0 1.6 0">
-            <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
-        </a-camera>
+        <a-camera position="0 1.6 0"><a-cursor color="#00FFFF"></a-cursor></a-camera>
     </a-scene>
 
     <script>
-        const API_KEY = localStorage.getItem('gemini_key') || prompt("API Key:");
+        const API_KEY = localStorage.getItem('gemini_key') || prompt("Cole sua API Key:");
         if (API_KEY) localStorage.setItem('gemini_key', API_KEY.trim());
 
         const core = document.querySelector('#void-core');
@@ -53,30 +53,23 @@
         let alphabetQueue = [];
         let currentIdx = 0;
 
-        // --- VOZ NATURAL ---
         const speak = (text) => {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
-            const voices = window.speechSynthesis.getVoices();
-            // Tenta encontrar uma voz premium em português
-            const bestVoice = voices.find(v => v.lang.includes('pt') && v.name.includes('Google')) || 
-                              voices.find(v => v.lang.includes('pt')) || 
-                              voices[0];
-            u.voice = bestVoice;
             u.lang = 'pt-BR';
-            u.rate = 0.9; // Um pouco mais lento para ser didático
+            u.rate = 1.0;
+            // No iPhone, a voz precisa ser ativada no clique do botão
             window.speechSynthesis.speak(u);
         };
 
         startBtn.onclick = async () => {
-            speak("Sistemas prontos. Aguardando comando.");
+            speak("Sistemas prontos. Pode me pedir para ensinar o alfabeto.");
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
                 setupPanel.style.display = 'none';
-            } catch (e) { alert("Permita o microfone."); }
+            } catch (e) { alert("Acesso ao microfone é obrigatório."); }
         };
 
-        // --- RECONHECIMENTO ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
@@ -85,8 +78,7 @@
             if (alphabetQueue.length > 0) {
                 proximaLetra();
             } else {
-                recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF');
+                try { recognition.start(); core.setAttribute('material', 'color', '#FF00FF'); } catch(e){}
             }
         });
 
@@ -94,7 +86,7 @@
             const transcript = event.results[0][0].transcript.toLowerCase();
             core.setAttribute('material', 'color', '#FFFF00');
             
-            if (transcript.includes("alfabeto") || transcript.includes("ensine")) {
+            if (transcript.includes("alfabeto") || transcript.includes("ensina") || transcript.includes("aula")) {
                 await iniciarAula();
             } else {
                 responderSimples(transcript);
@@ -102,12 +94,10 @@
         };
 
         async function iniciarAula() {
+            speak("Preparando o alfabeto em neon.");
             try {
-                speak("Vou carregar o alfabeto para você. Um momento.");
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-                
-                // Prompt reforçado para evitar textos extras
-                const promptAula = 'Responda APENAS com um array JSON puro, sem markdown, contendo as letras A, B, C, D e E (para teste rápido) neste formato: [{"l": "Letra", "t": "Texto didático"}].';
+                const promptAula = 'Gere um JSON estrito (array de objetos) para o alfabeto de A a J. Cada objeto deve ser {"l": "Letra", "t": "Texto curto"}. Não use markdown nem explique nada.';
 
                 const res = await fetch(url, {
                     method: 'POST',
@@ -118,16 +108,19 @@
                 const data = await res.json();
                 let rawText = data.candidates[0].content.parts[0].text;
                 
-                // Limpeza agressiva de Markdown (```json)
-                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                // LIMPEZA NINJA: Extrai apenas o que está entre [ e ]
+                const start = rawText.indexOf('[');
+                const end = rawText.lastIndexOf(']') + 1;
+                const cleanJson = rawText.substring(start, end);
                 
-                alphabetQueue = JSON.parse(rawText);
+                alphabetQueue = JSON.parse(cleanJson);
                 currentIdx = 0;
                 proximaLetra();
             } catch (e) {
                 console.error(e);
-                speak("Houve um problema ao organizar a aula. Tente novamente.");
+                speak("Erro ao ler os dados da aula. Vou tentar resetar.");
                 core.setAttribute('material', 'color', '#FF0000');
+                setTimeout(() => core.setAttribute('material', 'color', '#00FFFF'), 2000);
             }
         }
 
@@ -139,7 +132,7 @@
                 speak(item.t);
                 currentIdx++;
             } else {
-                speak("Aula concluída. Clique para um novo comando.");
+                speak("Aula completa por enquanto.");
                 alphabetQueue = [];
                 neonLetter.setAttribute('value', '');
                 core.setAttribute('material', 'color', '#00FFFF');
@@ -151,17 +144,14 @@
             const res = await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ contents: [{ parts: [{ text: "Responda em uma frase: " + t }] }] })
+                body: JSON.stringify({ contents: [{ parts: [{ text: "Responda curto: " + t }] }] })
             });
             const data = await res.json();
-            const resp = data.candidates[0].content.parts[0].text;
+            speak(data.candidates[0].content.parts[0].text);
             core.setAttribute('material', 'color', '#00FFFF');
-            speak(resp);
         }
 
-        recognition.onend = () => {
-            if (core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF');
-        };
+        recognition.onend = () => { if (core.getAttribute('material').color === '#FF00FF') core.setAttribute('material', 'color', '#00FFFF'); };
     </script>
 </body>
 </html>
