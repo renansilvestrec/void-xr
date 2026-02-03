@@ -2,19 +2,18 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VOID - Etapa XXXVI (Professor Restaurado)</title>
+    <title>VOID - Etapa XXXVII</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
         #setup-panel {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             z-index: 10000; background: #000; color: #00FFFF; padding: 30px;
             border: 2px solid #00FFFF; border-radius: 15px; text-align: center;
-            font-family: 'Courier New', Courier, monospace; box-shadow: 0 0 30px #00FFFF;
+            font-family: 'Courier New', monospace; box-shadow: 0 0 30px #00FFFF;
         }
         button {
-            background: #00FFFF; border: none; padding: 12px 25px;
-            font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 20px;
-            color: #000; text-transform: uppercase;
+            background: #00FFFF; border: none; padding: 15px 30px;
+            font-weight: bold; cursor: pointer; border-radius: 5px; color: #000;
         }
     </style>
 </head>
@@ -22,28 +21,20 @@
 
     <div id="setup-panel">
         <h2>VOID: INTERFACE ATIVA</h2>
-        <p>RESTAURANDO AMBIENTE IMERSIVO...</p>
-        <button id="start-btn">CONECTAR ÁUDIO</button>
+        <button id="start-btn">INICIAR SISTEMAS</button>
     </div>
 
     <a-scene background="color: #000000" cursor="rayOrigin: mouse">
-        <a-entity id="void-core" 
-                  class="clickable"
+        <a-entity id="void-core" class="clickable"
                   geometry="primitive: sphere; radius: 0.15" 
-                  material="color: #00FFFF; shader: flat; emissive: #00FFFF; emissiveIntensity: 1" 
+                  material="color: #00FFFF; shader: flat" 
                   position="0 1.5 -2"
                   animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; dur: 2000; loop: true">
         </a-entity>
 
-        <a-text id="neon-letter" 
-                value="" 
-                align="center"
-                color="#FFFFFF" 
-                position="0 1.9 -2" 
-                scale="1.5 1.5 1.5"
-                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"
-                material="shader: flat; emissive: #FFFFFF; emissiveIntensity: 2">
-        </a-text>
+        <a-text id="neon-letter" value="" align="center" color="#FFFFFF" 
+                position="0 2.0 -2" scale="2 2 2"
+                font="https://cdn.aframe.io/fonts/Mozor-Bold.fnt"></a-text>
 
         <a-camera position="0 1.6 0">
             <a-cursor color="#00FFFF" raycaster="objects: .clickable"></a-cursor>
@@ -62,40 +53,48 @@
         let alphabetQueue = [];
         let currentIdx = 0;
 
+        // --- VOZ NATURAL ---
         const speak = (text) => {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
+            const voices = window.speechSynthesis.getVoices();
+            // Tenta encontrar uma voz premium em português
+            const bestVoice = voices.find(v => v.lang.includes('pt') && v.name.includes('Google')) || 
+                              voices.find(v => v.lang.includes('pt')) || 
+                              voices[0];
+            u.voice = bestVoice;
             u.lang = 'pt-BR';
+            u.rate = 0.9; // Um pouco mais lento para ser didático
             window.speechSynthesis.speak(u);
         };
 
         startBtn.onclick = async () => {
-            speak("Sistemas restaurados. Ambiente VOID ativo.");
+            speak("Sistemas prontos. Aguardando comando.");
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
                 setupPanel.style.display = 'none';
-            } catch (e) { alert("Microfone necessário."); }
+            } catch (e) { alert("Permita o microfone."); }
         };
 
+        // --- RECONHECIMENTO ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
 
-        // CLIQUE NO NÚCLEO
         core.addEventListener('click', () => {
-            if (alphabetQueue.length > 0 && currentIdx < alphabetQueue.length) {
+            if (alphabetQueue.length > 0) {
                 proximaLetra();
             } else {
                 recognition.start();
-                core.setAttribute('material', 'color', '#FF00FF'); // Magenta
+                core.setAttribute('material', 'color', '#FF00FF');
             }
         });
 
         recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript.toLowerCase();
-            core.setAttribute('material', 'color', '#FFFF00'); // Amarelo
+            core.setAttribute('material', 'color', '#FFFF00');
             
-            if (transcript.includes("alfabeto")) {
+            if (transcript.includes("alfabeto") || transcript.includes("ensine")) {
                 await iniciarAula();
             } else {
                 responderSimples(transcript);
@@ -104,37 +103,55 @@
 
         async function iniciarAula() {
             try {
+                speak("Vou carregar o alfabeto para você. Um momento.");
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-                const prompt = 'Gere um JSON: [{"l": "A", "t": "A de Avião"}, {"l": "B", "t": "B de Bola"}]... até Z.';
                 
+                // Prompt reforçado para evitar textos extras
+                const promptAula = 'Responda APENAS com um array JSON puro, sem markdown, contendo as letras A, B, C, D e E (para teste rápido) neste formato: [{"l": "Letra", "t": "Texto didático"}].';
+
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: promptAula }] }] })
                 });
+                
                 const data = await res.json();
-                const text = data.candidates[0].content.parts[0].text;
-                alphabetQueue = JSON.parse(text.replace(/```json|```/g, '').trim());
+                let rawText = data.candidates[0].content.parts[0].text;
+                
+                // Limpeza agressiva de Markdown (```json)
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                alphabetQueue = JSON.parse(rawText);
                 currentIdx = 0;
                 proximaLetra();
-            } catch (e) { speak("Erro ao carregar aula."); }
+            } catch (e) {
+                console.error(e);
+                speak("Houve um problema ao organizar a aula. Tente novamente.");
+                core.setAttribute('material', 'color', '#FF0000');
+            }
         }
 
         function proximaLetra() {
-            const item = alphabetQueue[currentIdx];
-            neonLetter.setAttribute('value', item.l);
-            core.setAttribute('material', 'color', '#00FF00'); // Verde (Ensinando)
-            speak(item.t);
-            currentIdx++;
+            if (currentIdx < alphabetQueue.length) {
+                const item = alphabetQueue[currentIdx];
+                neonLetter.setAttribute('value', item.l);
+                core.setAttribute('material', 'color', '#00FF00'); // Verde
+                speak(item.t);
+                currentIdx++;
+            } else {
+                speak("Aula concluída. Clique para um novo comando.");
+                alphabetQueue = [];
+                neonLetter.setAttribute('value', '');
+                core.setAttribute('material', 'color', '#00FFFF');
+            }
         }
 
         async function responderSimples(t) {
-            // Lógica para respostas normais fora da aula
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
             const res = await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ contents: [{ parts: [{ text: t }] }] })
+                body: JSON.stringify({ contents: [{ parts: [{ text: "Responda em uma frase: " + t }] }] })
             });
             const data = await res.json();
             const resp = data.candidates[0].content.parts[0].text;
